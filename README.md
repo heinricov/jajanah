@@ -7,11 +7,12 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 ```
 .
 ├── apps/                 # Aplikasi (masih kosong)
-├── packages/             # Package bersama (masih kosong)
+├── packages/
+│   └── ui/               # @packages/ui — komponen shadcn/ui + Tailwind v4
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
 │   ├── typescript/       # @configs/typescript — preset tsconfig
-│   ├── eslint/           # @configs/eslint — preset flat config
+│   ├── eslint/           # @configs/eslint — preset flat config (base/node/react)
 │   └── prettier/         # @configs/prettier — 1-satunya config prettier
 ├── .github/workflows/    # CI pipeline
 ├── turbo.json            # Task graph & caching
@@ -62,16 +63,30 @@ import node from '@configs/eslint/node';
 export default [...node];
 ```
 
-| Preset                 | Untuk                                                  |
-| ---------------------- | ------------------------------------------------------ |
-| `@configs/eslint/base` | JS/TS + `typescript-eslint` + `eslint-config-prettier` |
-| `@configs/eslint/node` | `base` + global Node.js                                |
-
-> Preset React akan ditambahkan ke `configs/eslint/` saat aplikasi React pertama dibuat.
+| Preset                  | Untuk                                                  |
+| ----------------------- | ------------------------------------------------------ |
+| `@configs/eslint/base`  | JS/TS + `typescript-eslint` + `eslint-config-prettier` |
+| `@configs/eslint/node`  | `base` + global Node.js                                |
+| `@configs/eslint/react` | `base` + global browser + `eslint-plugin-react-hooks`  |
 
 ### Prettier
 
 Tidak ada `.prettierrc` di root maupun workspace. Root `package.json` menunjuk langsung ke `@configs/prettier` — ubah konfigurasi hanya di `configs/prettier/index.js`.
+
+## UI package (shadcn/ui)
+
+`packages/ui` (`@packages/ui`) berisi komponen [shadcn/ui](https://ui.shadcn.com) dengan Tailwind CSS v4 — Radix basis, preset Nova, base color neutral, ikon lucide. Konfigurasi paket ini memakai preset dari `configs/` (`@configs/typescript/react.json` + `@configs/eslint/react`), CSS theme hidup di `packages/ui/src/styles/globals.css`, dan `postcss.config.mjs` di-reexport oleh app (SSOT).
+
+```bash
+# tambah komponen
+pnpm dlx shadcn@latest add dialog -c packages/ui
+
+# dari app Next.js
+import { Button } from '@packages/ui/components/button';
+import '@packages/ui/globals.css';
+```
+
+Detail lengkap (integrasi Next.js, exports map, aturan components.json): lihat [`packages/ui/README.md`](packages/ui/README.md).
 
 ## Menambah workspace baru
 

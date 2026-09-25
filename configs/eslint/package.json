@@ -7,11 +7,14 @@
     "./base": "./base.js",
     "./base.js": "./base.js",
     "./node": "./node.js",
-    "./node.js": "./node.js"
+    "./node.js": "./node.js",
+    "./react": "./react.js",
+    "./react.js": "./react.js"
   },
   "dependencies": {
     "@eslint/js": "^10.0.1",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0",
     "typescript-eslint": "^8.70.1"
   }
