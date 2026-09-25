@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@configs/typescript/nest.json",
+  "compilerOptions": {
+    "types": [],
+    "useDefineForClassFields": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

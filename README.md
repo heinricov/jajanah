@@ -13,7 +13,8 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 ├── packages/
 │   ├── ui/                # @packages/ui — komponen shadcn/ui + Tailwind v4
 │   ├── environment/       # @packages/environment — loader .env (SSOT env)
-│   └── db/                # @packages/db — Prisma ORM 7 (PostgreSQL)
+│   ├── db/                # @packages/db — Prisma ORM 7 (PostgreSQL)
+│   └── validators/        # @packages/validators — SSOT types + kontrak request/response API
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
 │   ├── typescript/       # @configs/typescript — preset tsconfig (base/node/nest/react)
@@ -140,6 +141,27 @@ import { prisma } from '@packages/db';
 
 Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate`. Detail lengkap (struktur, cara menambah model): lihat [`packages/db/README.md`](packages/db/README.md).
 
+## API Contracts (`@packages/validators`)
+
+`packages/validators` adalah SSOT untuk **types/interface + bagaimana request & response API**, dipakai semua app (api, web, admin). Satu kontrak didefinisikan sekali dalam tiga lapisan saling terkunci:
+
+- **interface** (`src/types/`) — kanonik, satu kebenaran bentuk.
+- **Zod schema** (`src/schemas/`) — `z.ZodType<T>` dicek thd interface; untuk runtime validation di server & client.
+- **class-validator DTO** (`src/dtos/`) — `implements T`; untuk validasi request via `ValidationPipe` Nest.
+
+Envelope respon baku (1 kebenaran): sukses `{ data }`, paginated `{ data, meta }`, error `{ error: { status, code, message, details? } }` — via helper `ok()` / `paginated()` / `apiError()`.
+
+```ts
+import {
+  ok,
+  healthResponseSchema,
+  type HealthResponse,
+  PaginationQueryDto,
+} from '@packages/validators';
+```
+
+Cara menambah kontrak & detail pemakaian (server/client): lihat [`packages/validators/README.md`](packages/validators/README.md).
+
 ## Aplikasi
 
 | App          | Port | Peran                     | README                                         |
@@ -173,6 +195,7 @@ Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate`. Detail l
 
 - Konfigurasi hidup **hanya** di `configs/` — workspace lain hanya extend/import.
 - Nilai environment hidup **hanya** di file `.env*` root — jangan membuat `.env` lokal di app/package.
+- Kontrak request/response API (interface + Zod schema + class-validator DTO) hidup **hanya** di `packages/validators` — apps import dari sana, jangan deklarasikan ulang.
 - Dependency dipasang di workspace yang **langsung** menggunakannya; versi yang dipakai bersama harus konsisten.
 - Referensi antar workspace selalu pakai protokol `workspace:*`.
 - `pnpm-lock.yaml` adalah satu-satunya sumber kebenaran resolusi dependency — jangan commit `node_modules/`.
@@ -189,3 +212,4 @@ Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate`. Detail l
 - **PostCSS** — `packages/ui/postcss.config.mjs` memakai bentuk string (`'@tailwindcss/postcss': {}`); jangan diubah ke import instance (native binary `lightningcss` gagal dibundel Turbopack). App mere-export config ini lewat `postcss.config.mjs` sendiri.
 - **NestJS** — preset `@configs/typescript/nest.json` memakai `emitDecoratorMetadata` + `experimentalDecorators` (wajib untuk DI Nest; opsi legacy) dan meng-extend `node.json` (`NodeNext`) tanpa `"type": "module"`, sehingga output tetap CommonJS dengan resolusi modern. Jangan ganti builder ke SWC/esbuild tanpa plugin yang mendukung decorator metadata.
 - **Prisma** — dikunci di v7 (`prisma@^7`): URL pindah dari schema ke `prisma.config.ts`, klien wajib driver adapter (`PrismaPg`), dan generator `prisma-client` output ke folder di repo (bukan `node_modules`). Naik ke v8 (`prisma@latest`) butuh config shape baru (`definePrismaConfig`) dan rename API (`.limit/.offset`, `db.raw.sql`) — lakukan terpisah saat diperlukan.
+- **`@packages/validators`** — tsconfig extends preset `nest` (butuh `experimentalDecorators`/`emitDecoratorMetadata` untuk DTO class-validator) tetapi `types: []` + ESLint preset `base` (murni, browser-safe). Paket di-build ke `dist/` CJS seperti `@packages/db`; task `typecheck` Turbo sudah `dependsOn: ["^typecheck", "^build"]` supaya dist konsumen tersedia.

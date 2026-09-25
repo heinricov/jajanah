@@ -1,4 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
+import {
+  healthResponseSchema,
+  ok,
+  type ApiEnvelope,
+  type HealthResponse,
+} from '@packages/validators';
 
 import { AppService } from './app.service';
 
@@ -7,7 +13,7 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  getStatus() {
-    return this.appService.getStatus();
+  getStatus(): ApiEnvelope<HealthResponse> {
+    return ok(healthResponseSchema.parse(this.appService.getStatus()));
   }
 }

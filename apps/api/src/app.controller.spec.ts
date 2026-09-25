@@ -15,10 +15,11 @@ describe('AppController', () => {
     controller = moduleRef.get(AppController);
   });
 
-  it('should return the status payload', () => {
+  it('should return the envelope status payload', () => {
     const result = controller.getStatus();
 
-    expect(result).toEqual(expect.objectContaining({ service: 'api', status: 'ok' }));
-    expect(typeof result.mode).toBe('string');
+    expect(result.data.service).toBe('api');
+    expect(result.data.status).toBe('ok');
+    expect(typeof result.data.mode).toBe('string');
   });
 });
