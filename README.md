@@ -88,7 +88,7 @@ import { nextConfig } from '@configs/next';
 export default nextConfig;
 ```
 
-`@configs/next` menyiapkan `transpilePackages: ['@packages/ui']` dan `reactStrictMode` — semua app Next.js cukup re-export. Opsional: tambahkan konfigurasi khusus app sebagai object spread di atasnya. Config ini juga meng-import `@packages/environment`, sehingga setiap app Next.js **otomatis** memuat file `.env*` root (lihat section Environment).
+`@configs/next` menyiapkan `transpilePackages: ['@packages/ui']` dan `reactStrictMode` — semua app Next.js cukup re-export. Opsional: tambahkan konfigurasi khusus app sebagai object spread di atasnya. Config ini juga meng-import `@packages/environment`, sehingga setiap app Next.js **otomatis** memuat file `.env*` root (lihat section Environment). Package ini juga menyediakan bin **`next-app`** — launcher `next dev`/`next start` yang menyetel `process.env.PORT` dari variabel port di root `.env` (dipakai script `dev`/`start` kedua app).
 
 ### Prettier
 
@@ -122,6 +122,7 @@ import { getEnv, requireEnv, environment } from '@packages/environment';
 
 - **App Next.js tidak perlu apa-apa** — `@configs/next` sudah meng-import package ini; `NEXT_PUBLIC_*` otomatis ter-inline saat build.
 - **App NestJS (`apps/api`)** meng-import package ini sekali di `main.ts` sebelum bootstrap; endpoint membaca env lewat `environment` / `getEnv`.
+- **Port server** juga hidup di sini: `WEB_PORT`, `ADMIN_PORT`, `API_PORT`. Next.js dibaca lewat bin `next-app` (`@configs/next`), API lewat `process.env.API_PORT`; shell tetap bisa override (precedence menang).
 - Precedence: `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` (yang belakangan menang); variabel yang sudah ada di `process.env` (shell/CI) **selalu** menang.
 - Mode mengikuti `NODE_ENV` (default `development`).
 
@@ -135,7 +136,7 @@ Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menamb
 | `apps/admin` | 3001 | Panel administrasi (Next) | [`apps/admin/README.md`](apps/admin/README.md) |
 | `apps/api`   | 3002 | REST API (NestJS 11)      | [`apps/api/README.md`](apps/api/README.md)     |
 
-`apps/web` & `apps/admin` adalah Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`tsconfig` → `@configs/typescript/react.json`, ESLint → `@configs/eslint/next`, config → `@configs/next`) dan komponen dari `@packages/ui`. `pnpm dev` menjalankan semuanya paralel (web :3000, admin :3001, api :3002).
+`apps/web` & `apps/admin` adalah Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`tsconfig` → `@configs/typescript/react.json`, ESLint → `@configs/eslint/next`, config → `@configs/next`) dan komponen dari `@packages/ui`. `pnpm dev` menjalankan semuanya paralel (web :3000, admin :3001, api :3002) — port bawaan berasal dari `WEB_PORT` / `ADMIN_PORT` / `API_PORT` di root `.env` dan bisa diubah di sana.
 
 `apps/api` adalah NestJS 11 (CommonJS via `NodeNext`, builder `tsc`): `tsconfig` → `@configs/typescript/nest.json`, ESLint → `@configs/eslint/nest`, dan env dari `@packages/environment` (di-import di `main.ts`). Unit test memakai Jest (`pnpm test`).
 

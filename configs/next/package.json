@@ -9,6 +9,9 @@
       "default": "./index.js"
     }
   },
+  "bin": {
+    "next-app": "./bin/next-app.mjs"
+  },
   "dependencies": {
     "@packages/environment": "workspace:*"
   }

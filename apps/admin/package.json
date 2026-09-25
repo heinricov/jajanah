@@ -2,9 +2,9 @@
   "name": "admin",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "next-app ADMIN_PORT dev 3001",
     "build": "next build",
-    "start": "next start --port 3001",
+    "start": "next-app ADMIN_PORT start 3001",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit"
   },
@@ -15,6 +15,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@configs/next": "workspace:*",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0"
