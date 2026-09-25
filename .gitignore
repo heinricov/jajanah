@@ -5,6 +5,7 @@ build/
 .turbo/
 coverage/
 *.tsbuildinfo
+next-env.d.ts
 
 .env
 .env.*

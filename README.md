@@ -6,13 +6,16 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 
 ```
 .
-├── apps/                 # Aplikasi (masih kosong)
+├── apps/
+│   ├── web/               # Next.js 16 — situs web (port 3000)
+│   └── admin/             # Next.js 16 — panel admin (port 3001)
 ├── packages/
-│   └── ui/               # @packages/ui — komponen shadcn/ui + Tailwind v4
+│   └── ui/                # @packages/ui — komponen shadcn/ui + Tailwind v4
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
 │   ├── typescript/       # @configs/typescript — preset tsconfig
-│   ├── eslint/           # @configs/eslint — preset flat config (base/node/react)
+│   ├── eslint/           # @configs/eslint — preset flat config (base/node/react/next)
+│   ├── next/             # @configs/next — konfigurasi Next.js bersama
 │   └── prettier/         # @configs/prettier — 1-satunya config prettier
 ├── .github/workflows/    # CI pipeline
 ├── turbo.json            # Task graph & caching
@@ -68,6 +71,18 @@ export default [...node];
 | `@configs/eslint/base`  | JS/TS + `typescript-eslint` + `eslint-config-prettier` |
 | `@configs/eslint/node`  | `base` + global Node.js                                |
 | `@configs/eslint/react` | `base` + global browser + `eslint-plugin-react-hooks`  |
+| `@configs/eslint/next`  | `react` + `eslint-config-next/core-web-vitals`         |
+
+### Next.js
+
+```ts
+// next.config.mts di app Next.js
+import { nextConfig } from '@configs/next';
+
+export default nextConfig;
+```
+
+`@configs/next` menyiapkan `transpilePackages: ['@packages/ui']` dan `reactStrictMode` — semua app Next.js cukup re-export. Opsional: tambahkan konfigurasi khusus app sebagai object spread di atasnya.
 
 ### Prettier
 
@@ -88,14 +103,23 @@ import '@packages/ui/globals.css';
 
 Detail lengkap (integrasi Next.js, exports map, aturan components.json): lihat [`packages/ui/README.md`](packages/ui/README.md).
 
+## Aplikasi (Next.js)
+
+| App          | Port | Peran              | README                                         |
+| ------------ | ---- | ------------------ | ---------------------------------------------- |
+| `apps/web`   | 3000 | Situs web publik   | [`apps/web/README.md`](apps/web/README.md)     |
+| `apps/admin` | 3001 | Panel administrasi | [`apps/admin/README.md`](apps/admin/README.md) |
+
+Keduanya Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`tsconfig` → `@configs/typescript/react.json`, ESLint → `@configs/eslint/next`, config → `@configs/next`) dan komponen dari `@packages/ui`. `pnpm dev` menjalankan keduanya paralel (web :3000, admin :3001).
+
 ## Menambah workspace baru
 
 ### App (`apps/<nama>`)
 
-1. Buat `apps/<nama>/package.json` (`"private": true`)
-2. `tsconfig.json` → `extends` preset `@configs/typescript/*`
-3. `eslint.config.js` → import preset `@configs/eslint/*`
-4. Tambahkan script `build` / `dev` / `lint` / `typecheck` sesuai kebutuhan — Turbo otomatis mendeteksinya
+1. Buat `apps/<nama>/package.json` (`"private": true`) dengan script `build` / `dev` / `lint` / `typecheck` sesuai kebutuhan — Turbo otomatis mendeteksinya
+2. `tsconfig.json` → `extends` preset `@configs/typescript/*` (+ opsi Next bila perlu)
+3. `eslint.config.mjs` → import preset `@configs/eslint/*`
+4. Untuk app Next.js: `next.config.mts` → re-export `@configs/next`
 5. `pnpm install`
 
 ### Package (`packages/<nama>`)
@@ -116,4 +140,9 @@ Detail lengkap (integrasi Next.js, exports map, aturan components.json): lihat [
 
 `.github/workflows/ci.yml` berjalan di setiap push ke `main` dan setiap pull request:
 
-`pnpm install --frozen-lockfile` → `pnpm format:check` → `pnpm lint` → `pnpm typecheck`
+`pnpm install --frozen-lockfile` → `pnpm format:check` → `pnpm lint` → `pnpm typecheck` → `pnpm build`
+
+## Catatan tooling
+
+- **ESLint ^9** — `eslint-config-next` (eslint-plugin-react/jsx-a11y/import) belum mendukung ESLint 10 (`context.getFilename()` dihapus di v10). Naikkan ke v10 setelah ekosistem siap.
+- **PostCSS** — `packages/ui/postcss.config.mjs` memakai bentuk string (`'@tailwindcss/postcss': {}`); jangan diubah ke import instance (native binary `lightningcss` gagal dibundel Turbopack). App mere-export config ini lewat `postcss.config.mjs` sendiri.

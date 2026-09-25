@@ -43,7 +43,7 @@ pnpm dlx shadcn@latest add dialog dropdown-menu toast -c packages/ui
 ## Menggunakan di app (Next.js)
 
 ```bash
-pnpm --filter apps/web add @packages/ui --workspace:*
+pnpm --filter web add @packages/ui --workspace:*
 ```
 
 1. **Komponen** — import lewat exports map:
@@ -66,13 +66,15 @@ pnpm --filter apps/web add @packages/ui --workspace:*
    export { default } from '@packages/ui/postcss.config.mjs';
    ```
 
-4. **Next.js** — tambahkan transpilasi source TS dari package:
+   Config di package ini memakai **bentuk string** (`'@tailwindcss/postcss': {}`) — resolusi plugin mengikuti lokasi file config ini. Jangan diganti ke import instance: Turbopack ikut membundel `lightningcss` (native binary) lalu build gagal.
 
-   ```js
-   // next.config.ts
-   const nextConfig = {
-     transpilePackages: ['@packages/ui'],
-   };
+4. **Next.js** — konfigurasi Next bersama sudah didefinisikan sekali di `@configs/next` (`transpilePackages: ['@packages/ui']` + `reactStrictMode`); app cukup:
+
+   ```ts
+   // apps/web/next.config.mts
+   import { nextConfig } from '@configs/next';
+
+   export default nextConfig;
    ```
 
 ## Catatan

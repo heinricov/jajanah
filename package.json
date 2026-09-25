@@ -17,9 +17,10 @@
   },
   "devDependencies": {
     "@configs/eslint": "workspace:*",
+    "@configs/next": "workspace:*",
     "@configs/prettier": "workspace:*",
     "@configs/typescript": "workspace:*",
-    "eslint": "^10.11.0",
+    "eslint": "^9.39.5",
     "prettier": "^3.9.9",
     "turbo": "^2.11.4",
     "typescript": "~5.9.3"
