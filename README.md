@@ -10,13 +10,15 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 │   ├── web/               # Next.js 16 — situs web (port 3000)
 │   └── admin/             # Next.js 16 — panel admin (port 3001)
 ├── packages/
-│   └── ui/                # @packages/ui — komponen shadcn/ui + Tailwind v4
+│   ├── ui/                # @packages/ui — komponen shadcn/ui + Tailwind v4
+│   └── environment/       # @packages/environment — loader .env (SSOT env)
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
 │   ├── typescript/       # @configs/typescript — preset tsconfig
 │   ├── eslint/           # @configs/eslint — preset flat config (base/node/react/next)
-│   ├── next/             # @configs/next — konfigurasi Next.js bersama
+│   ├── next/             # @configs/next — konfigurasi Next.js bersama (+ auto-load env)
 │   └── prettier/         # @configs/prettier — 1-satunya config prettier
+├── .env.example          # Dokumentasi variabel env (nilai di .env*, gitignored)
 ├── .github/workflows/    # CI pipeline
 ├── turbo.json            # Task graph & caching
 └── pnpm-workspace.yaml   # Daftar workspace
@@ -82,7 +84,7 @@ import { nextConfig } from '@configs/next';
 export default nextConfig;
 ```
 
-`@configs/next` menyiapkan `transpilePackages: ['@packages/ui']` dan `reactStrictMode` — semua app Next.js cukup re-export. Opsional: tambahkan konfigurasi khusus app sebagai object spread di atasnya.
+`@configs/next` menyiapkan `transpilePackages: ['@packages/ui']` dan `reactStrictMode` — semua app Next.js cukup re-export. Opsional: tambahkan konfigurasi khusus app sebagai object spread di atasnya. Config ini juga meng-import `@packages/environment`, sehingga setiap app Next.js **otomatis** memuat file `.env*` root (lihat section Environment).
 
 ### Prettier
 
@@ -102,6 +104,23 @@ import '@packages/ui/globals.css';
 ```
 
 Detail lengkap (integrasi Next.js, exports map, aturan components.json): lihat [`packages/ui/README.md`](packages/ui/README.md).
+
+## Environment (SSOT)
+
+Nilai environment hidup **hanya di root repo**: `.env`, `.env.development`, `.env.test`, `.env.production` (+ varian `.local` yang di-gitignore; `.env.example` di-commit sebagai dokumentasi). Loader `@packages/environment` membacanya dari root (walk-up via `pnpm-workspace.yaml`), jadi berlaku untuk konsumen di folder mana pun — apps, packages, scripts.
+
+```js
+// Konsumen non-Next (scripts/, tooling) — tambah dependency workspace dulu:
+import '@packages/environment'; // side-effect: isi process.env dari .env* root
+
+import { getEnv, requireEnv, environment } from '@packages/environment';
+```
+
+- **App Next.js tidak perlu apa-apa** — `@configs/next` sudah meng-import package ini; `NEXT_PUBLIC_*` otomatis ter-inline saat build.
+- Precedence: `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` (yang belakangan menang); variabel yang sudah ada di `process.env` (shell/CI) **selalu** menang.
+- Mode mengikuti `NODE_ENV` (default `development`).
+
+Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menambah variabel): lihat [`packages/environment/README.md`](packages/environment/README.md).
 
 ## Aplikasi (Next.js)
 
@@ -132,6 +151,7 @@ Keduanya Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`t
 ## Aturan SSOT
 
 - Konfigurasi hidup **hanya** di `configs/` — workspace lain hanya extend/import.
+- Nilai environment hidup **hanya** di file `.env*` root — jangan membuat `.env` lokal di app/package.
 - Dependency dipasang di workspace yang **langsung** menggunakannya; versi yang dipakai bersama harus konsisten.
 - Referensi antar workspace selalu pakai protokol `workspace:*`.
 - `pnpm-lock.yaml` adalah satu-satunya sumber kebenaran resolusi dependency — jangan commit `node_modules/`.

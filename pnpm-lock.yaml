@@ -23,6 +23,9 @@ importers:
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)
+      globals:
+        specifier: ^17.12.0
+        version: 17.12.0
       prettier:
         specifier: ^3.9.9
         version: 3.9.9
@@ -108,11 +111,24 @@ importers:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)
 
-  configs/next: {}
+  configs/next:
+    dependencies:
+      '@packages/environment':
+        specifier: workspace:*
+        version: link:../../packages/environment
 
   configs/prettier: {}
 
   configs/typescript: {}
+
+  packages/environment:
+    dependencies:
+      dotenv:
+        specifier: ^18.0.3
+        version: 18.0.3
+      dotenv-expand:
+        specifier: ^1000.0.0
+        version: 1000.0.0
 
   packages/ui:
     dependencies:
@@ -2049,9 +2065,18 @@ packages:
     resolution: {integrity: sha512-tE7ztYzXHIeyvc7N+hR3oi7FIbf/NIjVP9hmAt3yMXzrQ072/fpjGLx2GxNxGxUl5V73MEqYzioOMoVhGMJ5cA==}
     engines: {node: '>=10'}
 
+  dotenv-expand@1000.0.0:
+    resolution: {integrity: sha512-3T4TtUjXm5iGKFEirqKjcDJ0EheFJbv9peb5xytC+HNu3l5Ygnu4dYE8yeqkppHMsh1If9C/A//EJu7IPtNu+A==}
+    engines: {node: '>=16'}
+
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
+
+  dotenv@18.0.3:
+    resolution: {integrity: sha512-/8CJTyL817qPnfbQrJgOEcrU3fDrJkRIoXBE566wHuvIXKOCHUZhPqGPbCPi9SogjdGnreF0TlvnTgK6J/8zpA==}
+    engines: {node: '>=12'}
+    hasBin: true
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -5705,7 +5730,11 @@ snapshots:
     dependencies:
       is-obj: 2.0.0
 
+  dotenv-expand@1000.0.0: {}
+
   dotenv@17.4.2: {}
+
+  dotenv@18.0.3: {}
 
   dunder-proto@1.0.1:
     dependencies:

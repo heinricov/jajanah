@@ -32,6 +32,10 @@ export default function HomePage() {
           </div>
         </CardContent>
       </Card>
+
+      <p className="text-xs text-muted-foreground">
+        NEXT_PUBLIC_APP_NAME = {process.env.NEXT_PUBLIC_APP_NAME ?? '(belum di-set)'}
+      </p>
     </main>
   );
 }
