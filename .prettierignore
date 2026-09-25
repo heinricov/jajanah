@@ -7,3 +7,4 @@ coverage/
 pnpm-lock.yaml
 .opencode/
 CHANGELOG.md
+packages/db/src/generated/

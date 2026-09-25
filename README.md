@@ -12,7 +12,8 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 │   └── api/               # NestJS 11 — REST API (port 3002)
 ├── packages/
 │   ├── ui/                # @packages/ui — komponen shadcn/ui + Tailwind v4
-│   └── environment/       # @packages/environment — loader .env (SSOT env)
+│   ├── environment/       # @packages/environment — loader .env (SSOT env)
+│   └── db/                # @packages/db — Prisma ORM 7 (PostgreSQL)
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
 │   ├── typescript/       # @configs/typescript — preset tsconfig (base/node/nest/react)
@@ -123,10 +124,21 @@ import { getEnv, requireEnv, environment } from '@packages/environment';
 - **App Next.js tidak perlu apa-apa** — `@configs/next` sudah meng-import package ini; `NEXT_PUBLIC_*` otomatis ter-inline saat build.
 - **App NestJS (`apps/api`)** meng-import package ini sekali di `main.ts` sebelum bootstrap; endpoint membaca env lewat `environment` / `getEnv`.
 - **Port server** juga hidup di sini: `WEB_PORT`, `ADMIN_PORT`, `API_PORT`. Next.js dibaca lewat bin `next-app` (`@configs/next`), API lewat `process.env.API_PORT`; shell tetap bisa override (precedence menang).
+- **Koneksi database**: `DATABASE_URL`, `POSTGRES_URL`, `PRISMA_DATABASE_URL` (nilainya sama). Dibaca `@packages/db` via `prisma.config.ts` yang meng-import `@packages/environment` — sama seperti consumer lain, Prisma tidak punya loader `.env` sendiri.
 - Precedence: `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` (yang belakangan menang); variabel yang sudah ada di `process.env` (shell/CI) **selalu** menang.
 - Mode mengikuti `NODE_ENV` (default `development`).
 
 Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menambah variabel): lihat [`packages/environment/README.md`](packages/environment/README.md).
+
+## Database (Prisma)
+
+`packages/db` (`@packages/db`) adalah paket database tunggal: Prisma ORM 7 + PostgreSQL (driver adapter `@prisma/adapter-pg`). Schema (`prisma/schema.prisma`) belum berisi model, URL koneksi hidup di `prisma.config.ts` (dibaca dari `DATABASE_URL` root `.env` lewat `@packages/environment`), dan client hasil `generate` output ke `src/generated/prisma/` (di-gitignore). Konsumen cukup:
+
+```ts
+import { prisma } from '@packages/db';
+```
+
+Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate`. Detail lengkap (struktur, cara menambah model): lihat [`packages/db/README.md`](packages/db/README.md).
 
 ## Aplikasi
 
@@ -176,3 +188,4 @@ Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menamb
 - **ESLint ^9** — `eslint-config-next` (eslint-plugin-react/jsx-a11y/import) belum mendukung ESLint 10 (`context.getFilename()` dihapus di v10). Naikkan ke v10 setelah ekosistem siap.
 - **PostCSS** — `packages/ui/postcss.config.mjs` memakai bentuk string (`'@tailwindcss/postcss': {}`); jangan diubah ke import instance (native binary `lightningcss` gagal dibundel Turbopack). App mere-export config ini lewat `postcss.config.mjs` sendiri.
 - **NestJS** — preset `@configs/typescript/nest.json` memakai `emitDecoratorMetadata` + `experimentalDecorators` (wajib untuk DI Nest; opsi legacy) dan meng-extend `node.json` (`NodeNext`) tanpa `"type": "module"`, sehingga output tetap CommonJS dengan resolusi modern. Jangan ganti builder ke SWC/esbuild tanpa plugin yang mendukung decorator metadata.
+- **Prisma** — dikunci di v7 (`prisma@^7`): URL pindah dari schema ke `prisma.config.ts`, klien wajib driver adapter (`PrismaPg`), dan generator `prisma-client` output ke folder di repo (bukan `node_modules`). Naik ke v8 (`prisma@latest`) butuh config shape baru (`definePrismaConfig`) dan rename API (`.limit/.offset`, `db.raw.sql`) — lakukan terpisah saat diperlukan.
