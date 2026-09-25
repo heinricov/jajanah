@@ -25,7 +25,8 @@ apps/api/
 ├── tsconfig.build.json   # untuk `nest build` — exclude *.spec.ts
 ├── eslint.config.mjs     # re-export @configs/eslint/nest (SSOT)
 └── src/
-    ├── main.ts           # import reflect-metadata + @packages/environment → bootstrap (port API_PORT) + enableCors() + ValidationPipe global
+    ├── main.ts           # import reflect-metadata + @packages/environment → bootstrap (port API_PORT) + useLogger + request logger + enableCors() + ValidationPipe global
+    ├── logger.ts         # glue @packages/logger: level/format dari getEnv(LOG_LEVEL/LOG_FORMAT)
     ├── app.module.ts     # root module
     ├── app.controller.ts # GET / → envelope { data: HealthResponse } (dikontrak @packages/validators)
     ├── app.service.ts    # membaca env via `environment`/`getEnv` (@packages/environment), return type HealthResponse
@@ -41,6 +42,15 @@ apps/api/
 
 > CORS aktif (`app.enableCors()` di `main.ts`) supaya browser web/admin (`:3000`/`:3001`) boleh memanggil API via `@packages/client`. Untuk produksi, pertimbangkan membatasi origin lewat env.
 
+> Setiap respons membawa header `x-request-id` (requestId masuk dihormati, atau dibuat baru) — dipakai untuk mengorelasikan akses log dengan client.
+
+## Logging (`@packages/logger`)
+
+- `main.ts` memasang `createRequestLogger({ logger })` — konteks `{ requestId, method, path }` masuk `AsyncLocalStorage` sebelum request masuk handler; kode di controller/service cukup `logger.info(...)` dan konteks ikut otomatis.
+- `main.ts` juga memasang `NestLoggerService` (`app.useLogger`) — log internal Nest (bootstrap, init, exception) ikut level & format yang sama.
+- Level/format dari env: `LOG_LEVEL` (debug|info|warn|error), `LOG_FORMAT` (json|pretty) — dibaca `src/logger.ts` via `getEnv`; default dev debug/pretty, prod info/json (lihat root `.env*`).
+- Log keluaran: `request completed` (info/warn/error sesuai status) berisi `statusCode` + `durationMs`; key sensitif otomatis `[REDACTED]`.
+
 ## Kontrak request/response (SSOT)
 
 Semua bentuk request & response didefinisikan **hanya** di `@packages/validators` (interface kanonik + Zod schema + class-validator DTO):
@@ -55,4 +65,5 @@ Semua bentuk request & response didefinisikan **hanya** di `@packages/validators
 - Nilai environment hidup di file `.env*` **root**; `main.ts` meng-import `@packages/environment` sekali untuk memuatnya (mode mengikuti `NODE_ENV`, default `development`). Jangan membuat `.env` lokal di app ini.
 - `dist/` dan `coverage/` adalah hasil generate — di-ignore di `.gitignore` root (jangan commit).
 - Jangan deklarasikan tipe request/response di app ini — import dari `@packages/validators` (lihat section sebelumnya).
+- Logging **hanya** lewat `@packages/logger` (`logger.ts` glue) — jangan `console.log` / `Logger` Nest langsung di code; request context jangan diper-coba manual (sudah otomatis via ALS).
 - Menambah modul/baris resource: `pnpm --filter api exec nest g module <nama>` (schematics dari `@nestjs/cli`).

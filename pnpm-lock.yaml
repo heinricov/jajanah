@@ -84,6 +84,9 @@ importers:
       '@packages/environment':
         specifier: workspace:*
         version: link:../../packages/environment
+      '@packages/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@packages/validators':
         specifier: workspace:*
         version: link:../../packages/validators
@@ -249,6 +252,27 @@ importers:
       dotenv-expand:
         specifier: ^1000.0.0
         version: 1000.0.0
+
+  packages/logger:
+    devDependencies:
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.2.6(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@types/jest':
+        specifier: ^29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.6
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@24.13.6)
+      ts-jest:
+        specifier: ^29.2.6
+        version: 29.4.13(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest-util@29.7.0)(jest@29.7.0)(typescript@5.9.3)
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   packages/ui:
     dependencies:

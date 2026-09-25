@@ -15,7 +15,8 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 │   ├── environment/       # @packages/environment — loader .env (SSOT env)
 │   ├── db/                # @packages/db — Prisma ORM 7 (PostgreSQL)
 │   ├── validators/        # @packages/validators — SSOT types + kontrak request/response API
-│   └── client/            # @packages/client — typed API client (satu-satunya jalur web → api)
+│   ├── client/            # @packages/client — typed API client (satu-satunya jalur web → api)
+│   └── logger/            # @packages/logger — structured logger + request context (AsyncLocalStorage)
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
 │   ├── typescript/       # @configs/typescript — preset tsconfig (base/node/nest/react)
@@ -128,6 +129,7 @@ import { getEnv, requireEnv, environment } from '@packages/environment';
 - **App NestJS (`apps/api`)** meng-import package ini sekali di `main.ts` sebelum bootstrap; endpoint membaca env lewat `environment` / `getEnv`.
 - **Port server** juga hidup di sini: `WEB_PORT`, `ADMIN_PORT`, `API_PORT`. Next.js dibaca lewat bin `next-app` (`@configs/next`), API lewat `process.env.API_PORT`; shell tetap bisa override (precedence menang).
 - **Base URL API client**: `NEXT_PUBLIC_API_URL` (di-inline Next ke bundle; dev = `http://localhost:3002` via `.env.development`, dasar = URL publik). Berbeda dari `API_BASE_URL` — alamat yang dilaporkan API tentang dirinya sendiri (field `baseUrl` di `GET /`).
+- **Logging backend**: `LOG_LEVEL` (`debug|info|warn|error`) & `LOG_FORMAT` (`json|pretty`) — dibaca `apps/api` via `getEnv` untuk `@packages/logger`. Default: info/json (prod), debug/pretty (dev), error (test via `.env.test`).
 - **Koneksi database**: `DATABASE_URL`, `POSTGRES_URL`, `PRISMA_DATABASE_URL` (nilainya sama). Dibaca `@packages/db` via `prisma.config.ts` yang meng-import `@packages/environment` — sama seperti consumer lain, Prisma tidak punya loader `.env` sendiri.
 - Precedence: `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` (yang belakangan menang); variabel yang sudah ada di `process.env` (shell/CI) **selalu** menang.
 - Mode mengikuti `NODE_ENV` (default `development`).
@@ -186,6 +188,23 @@ try {
 
 Detail (alur request, cara menambah endpoint, perintah): lihat [`packages/client/README.md`](packages/client/README.md).
 
+## Logging (`@packages/logger`)
+
+`packages/logger` adalah logger terstruktur backend Node dengan **request context otomatis** — memakai `AsyncLocalStorage`, setiap baris log keluaran otomatis membawa `requestId`, `method`, `path` (dan `userId` nanti saat auth ada) tanpa dioper lewat parameter.
+
+```ts
+import { createLogger, runWithContext } from '@packages/logger';
+
+const logger = createLogger({ level: 'info', format: 'json' });
+logger.info('melayani'); // context aktif ikut terbawa otomatis
+```
+
+- `apps/api` memasang `createRequestLogger` (middleware: `requestId` dari header `x-request-id` masuk → di-`runWithContext` → dibalikkan di response header + log `request completed` dengan `statusCode`/`durationMs`) dan `NestLoggerService` (log internal Nest ikut format/level yang sama).
+- Format `json` (prod) / `pretty` (dev) & level diatur via env `LOG_LEVEL` / `LOG_FORMAT`.
+- Key sensitif (`authorization`, `password`, `token`, ...) otomatis `[REDACTED]`.
+
+Detail (API ALS, redaction, mapping Nest): lihat [`packages/logger/README.md`](packages/logger/README.md).
+
 ## Aplikasi
 
 | App          | Port | Peran                     | README                                         |
@@ -239,3 +258,4 @@ Detail (alur request, cara menambah endpoint, perintah): lihat [`packages/client
 - **Prisma** — dikunci di v7 (`prisma@^7`): URL pindah dari schema ke `prisma.config.ts`, klien wajib driver adapter (`PrismaPg`), dan generator `prisma-client` output ke folder di repo (bukan `node_modules`). Naik ke v8 (`prisma@latest`) butuh config shape baru (`definePrismaConfig`) dan rename API (`.limit/.offset`, `db.raw.sql`) — lakukan terpisah saat diperlukan.
 - **`@packages/validators`** — tsconfig extends preset `nest` (butuh `experimentalDecorators`/`emitDecoratorMetadata` untuk DTO class-validator) tetapi `types: []` + ESLint preset `base` (murni, browser-safe). Paket di-build ke `dist/` CJS seperti `@packages/db`; task `typecheck` Turbo sudah `dependsOn: ["^typecheck", "^build"]` supaya dist konsumen tersedia.
 - **`@packages/client`** — preset baru `browser.json` (base + lib DOM) lalu di-override `module: NodeNext` untuk emit CJS. `NEXT_PUBLIC_API_URL` hanya di-inline oleh Next; di Node (smoke/tes) dibaca dari `process.env` runtime lewat deklarasi lokal `env.d.ts` (package sengaja tanpa `@types/node`).
+- **`@packages/logger`** — Node-only (pakai `node:async_hooks`), zero runtime deps; tsconfig extend `node.json` + `verbatimModuleSyntax: false` (emit CJS). `@nestjs/common` sengaja hanya devDependency (tipe `LoggerService` via `import type`).

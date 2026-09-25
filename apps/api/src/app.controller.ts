@@ -7,6 +7,7 @@ import {
 } from '@packages/validators';
 
 import { AppService } from './app.service';
+import { logger } from './logger';
 
 @Controller()
 export class AppController {
@@ -14,6 +15,7 @@ export class AppController {
 
   @Get()
   getStatus(): ApiEnvelope<HealthResponse> {
+    logger.info('serving status');
     return ok(healthResponseSchema.parse(this.appService.getStatus()));
   }
 }
