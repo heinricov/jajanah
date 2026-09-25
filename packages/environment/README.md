@@ -2,6 +2,8 @@
 
 Loader environment tunggal (SSOT) untuk seluruh monorepo. Semua yang butuh file env cukup `import '@packages/environment'` — file `.env*` di **root repo** otomatis dibaca, apa pun cwd konsumennya.
 
+> Format paket: **CommonJS** (tanpa `"type": "module"`) supaya bisa dikonsumsi dari ESM (`import`), CJS (`require`), maupun Jest — tanpa dual-build.
+
 ## Sumber nilai (SSOT)
 
 Nilai env hidup **hanya** di root repo — bukan di tiap app:

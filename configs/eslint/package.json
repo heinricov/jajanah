@@ -8,6 +8,8 @@
     "./base.js": "./base.js",
     "./node": "./node.js",
     "./node.js": "./node.js",
+    "./nest": "./nest.js",
+    "./nest.js": "./nest.js",
     "./react": "./react.js",
     "./react.js": "./react.js",
     "./next": "./next.js",

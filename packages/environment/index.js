@@ -1,9 +1,9 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { parse } from 'dotenv';
-import { expand } from 'dotenv-expand';
+const fs = require('node:fs');
+const path = require('node:path');
+const { parse } = require('dotenv');
+const { expand } = require('dotenv-expand');
 
-export function findRepoRoot(startDir = process.cwd()) {
+function findRepoRoot(startDir = process.cwd()) {
   let dir = path.resolve(startDir);
 
   for (;;) {
@@ -29,7 +29,7 @@ function envFiles(mode, root) {
   return files;
 }
 
-export function loadEnvironment({
+function loadEnvironment({
   mode = process.env.NODE_ENV || 'development',
   root = findRepoRoot(),
 } = {}) {
@@ -52,12 +52,12 @@ export function loadEnvironment({
   return Object.freeze({ ...parsed });
 }
 
-export function getEnv(name, fallback) {
+function getEnv(name, fallback) {
   const value = process.env[name];
   return value === undefined ? fallback : value;
 }
 
-export function requireEnv(name) {
+function requireEnv(name) {
   const value = process.env[name];
   if (value === undefined || value === '') {
     throw new Error(
@@ -67,7 +67,7 @@ export function requireEnv(name) {
   return value;
 }
 
-export const environment = new Proxy(Object.create(null), {
+const environment = new Proxy(Object.create(null), {
   get: (_target, key) => (typeof key === 'string' ? process.env[key] : undefined),
   has: (_target, key) => typeof key === 'string' && key in process.env,
   ownKeys: () => Reflect.ownKeys(process.env),
@@ -78,5 +78,7 @@ export const environment = new Proxy(Object.create(null), {
     return undefined;
   },
 });
+
+module.exports = { findRepoRoot, loadEnvironment, getEnv, requireEnv, environment };
 
 loadEnvironment();

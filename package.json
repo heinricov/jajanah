@@ -11,6 +11,7 @@
     "lint": "turbo run lint lint:root",
     "lint:root": "eslint .",
     "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
     "check": "turbo run lint lint:root typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

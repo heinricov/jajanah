@@ -8,14 +8,15 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 .
 ├── apps/
 │   ├── web/               # Next.js 16 — situs web (port 3000)
-│   └── admin/             # Next.js 16 — panel admin (port 3001)
+│   ├── admin/             # Next.js 16 — panel admin (port 3001)
+│   └── api/               # NestJS 11 — REST API (port 3002)
 ├── packages/
 │   ├── ui/                # @packages/ui — komponen shadcn/ui + Tailwind v4
 │   └── environment/       # @packages/environment — loader .env (SSOT env)
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
-│   ├── typescript/       # @configs/typescript — preset tsconfig
-│   ├── eslint/           # @configs/eslint — preset flat config (base/node/react/next)
+│   ├── typescript/       # @configs/typescript — preset tsconfig (base/node/nest/react)
+│   ├── eslint/           # @configs/eslint — preset flat config (base/node/nest/react/next)
 │   ├── next/             # @configs/next — konfigurasi Next.js bersama (+ auto-load env)
 │   └── prettier/         # @configs/prettier — 1-satunya config prettier
 ├── .env.example          # Dokumentasi variabel env (nilai di .env*, gitignored)
@@ -33,6 +34,7 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 | `pnpm dev`          | Jalankan task `dev` semua workspace              |
 | `pnpm lint`         | Lint semua workspace + root                      |
 | `pnpm typecheck`    | Type-check semua workspace                       |
+| `pnpm test`         | Jalankan unit test semua workspace (Jest)        |
 | `pnpm check`        | Lint + typecheck sekaligus                       |
 | `pnpm format`       | Format seluruh kode dengan Prettier              |
 | `pnpm format:check` | Cek format tanpa menulis (dipakai di CI)         |
@@ -53,11 +55,12 @@ Jangan pernah meng-copy konfigurasi antar workspace. Selalu **extend/import** da
 }
 ```
 
-| Preset                           | Untuk                                              |
-| -------------------------------- | -------------------------------------------------- |
-| `@configs/typescript/base.json`  | Default (ESNext + bundler resolution)              |
-| `@configs/typescript/node.json`  | CLI / backend Node.js (`NodeNext` + `@types/node`) |
-| `@configs/typescript/react.json` | Frontend React (`jsx: react-jsx` + DOM lib)        |
+| Preset                           | Untuk                                                                |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `@configs/typescript/base.json`  | Default (ESNext + bundler resolution)                                |
+| `@configs/typescript/node.json`  | CLI / backend Node.js (`NodeNext` + `@types/node`)                   |
+| `@configs/typescript/nest.json`  | Backend NestJS (`node.json` + decorator metadata, output ke `dist/`) |
+| `@configs/typescript/react.json` | Frontend React (`jsx: react-jsx` + DOM lib)                          |
 
 ### ESLint
 
@@ -72,6 +75,7 @@ export default [...node];
 | ----------------------- | ------------------------------------------------------ |
 | `@configs/eslint/base`  | JS/TS + `typescript-eslint` + `eslint-config-prettier` |
 | `@configs/eslint/node`  | `base` + global Node.js                                |
+| `@configs/eslint/nest`  | `node` + global Jest (untuk file test NestJS)          |
 | `@configs/eslint/react` | `base` + global browser + `eslint-plugin-react-hooks`  |
 | `@configs/eslint/next`  | `react` + `eslint-config-next/core-web-vitals`         |
 
@@ -117,19 +121,23 @@ import { getEnv, requireEnv, environment } from '@packages/environment';
 ```
 
 - **App Next.js tidak perlu apa-apa** — `@configs/next` sudah meng-import package ini; `NEXT_PUBLIC_*` otomatis ter-inline saat build.
+- **App NestJS (`apps/api`)** meng-import package ini sekali di `main.ts` sebelum bootstrap; endpoint membaca env lewat `environment` / `getEnv`.
 - Precedence: `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` (yang belakangan menang); variabel yang sudah ada di `process.env` (shell/CI) **selalu** menang.
 - Mode mengikuti `NODE_ENV` (default `development`).
 
 Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menambah variabel): lihat [`packages/environment/README.md`](packages/environment/README.md).
 
-## Aplikasi (Next.js)
+## Aplikasi
 
-| App          | Port | Peran              | README                                         |
-| ------------ | ---- | ------------------ | ---------------------------------------------- |
-| `apps/web`   | 3000 | Situs web publik   | [`apps/web/README.md`](apps/web/README.md)     |
-| `apps/admin` | 3001 | Panel administrasi | [`apps/admin/README.md`](apps/admin/README.md) |
+| App          | Port | Peran                     | README                                         |
+| ------------ | ---- | ------------------------- | ---------------------------------------------- |
+| `apps/web`   | 3000 | Situs web publik (Next)   | [`apps/web/README.md`](apps/web/README.md)     |
+| `apps/admin` | 3001 | Panel administrasi (Next) | [`apps/admin/README.md`](apps/admin/README.md) |
+| `apps/api`   | 3002 | REST API (NestJS 11)      | [`apps/api/README.md`](apps/api/README.md)     |
 
-Keduanya Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`tsconfig` → `@configs/typescript/react.json`, ESLint → `@configs/eslint/next`, config → `@configs/next`) dan komponen dari `@packages/ui`. `pnpm dev` menjalankan keduanya paralel (web :3000, admin :3001).
+`apps/web` & `apps/admin` adalah Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`tsconfig` → `@configs/typescript/react.json`, ESLint → `@configs/eslint/next`, config → `@configs/next`) dan komponen dari `@packages/ui`. `pnpm dev` menjalankan semuanya paralel (web :3000, admin :3001, api :3002).
+
+`apps/api` adalah NestJS 11 (CommonJS via `NodeNext`, builder `tsc`): `tsconfig` → `@configs/typescript/nest.json`, ESLint → `@configs/eslint/nest`, dan env dari `@packages/environment` (di-import di `main.ts`). Unit test memakai Jest (`pnpm test`).
 
 ## Menambah workspace baru
 
@@ -160,9 +168,10 @@ Keduanya Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`t
 
 `.github/workflows/ci.yml` berjalan di setiap push ke `main` dan setiap pull request:
 
-`pnpm install --frozen-lockfile` → `pnpm format:check` → `pnpm lint` → `pnpm typecheck` → `pnpm build`
+`pnpm install --frozen-lockfile` → `pnpm format:check` → `pnpm lint` → `pnpm typecheck` → `pnpm test` → `pnpm build`
 
 ## Catatan tooling
 
 - **ESLint ^9** — `eslint-config-next` (eslint-plugin-react/jsx-a11y/import) belum mendukung ESLint 10 (`context.getFilename()` dihapus di v10). Naikkan ke v10 setelah ekosistem siap.
 - **PostCSS** — `packages/ui/postcss.config.mjs` memakai bentuk string (`'@tailwindcss/postcss': {}`); jangan diubah ke import instance (native binary `lightningcss` gagal dibundel Turbopack). App mere-export config ini lewat `postcss.config.mjs` sendiri.
+- **NestJS** — preset `@configs/typescript/nest.json` memakai `emitDecoratorMetadata` + `experimentalDecorators` (wajib untuk DI Nest; opsi legacy) dan meng-extend `node.json` (`NodeNext`) tanpa `"type": "module"`, sehingga output tetap CommonJS dengan resolusi modern. Jangan ganti builder ke SWC/esbuild tanpa plugin yang mendukung decorator metadata.

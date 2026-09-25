@@ -6,6 +6,7 @@
     ".": "./base.json",
     "./base.json": "./base.json",
     "./node.json": "./node.json",
+    "./nest.json": "./nest.json",
     "./react.json": "./react.json"
   }
 }
