@@ -21,10 +21,10 @@ apps/admin/
 ├── package.json        # script Next.js + dependensi runtime (next, react, @packages/ui)
 ├── next.config.mts     # re-export @configs/next (SSOT: transpilePackages, reactStrictMode)
 ├── postcss.config.mjs  # re-export @packages/ui/postcss.config.mjs (SSOT Tailwind/PostCSS)
-├── tsconfig.json       # extends @configs/typescript/react.json + opsi Next (paths @/* → src/*)
+├── tsconfig.json       # extends @configs/typescript/react.json + opsi Next (paths @/* → ./*)
 ├── eslint.config.mjs   # re-export @configs/eslint/next (SSOT)
-├── components.json     # config CLI shadcn — komponen baru masuk src/, utils → @packages/ui
-└── src/app/
+├── components.json     # config CLI shadcn — komponen baru masuk components/, utils → @packages/ui
+└── app/
     ├── layout.tsx      # import @packages/ui/globals.css (satu-satunya sumber theme)
     └── page.tsx        # halaman contoh dashboard memakai Button, Card, Input, Badge
 ```
