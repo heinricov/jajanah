@@ -14,7 +14,8 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 │   ├── ui/                # @packages/ui — komponen shadcn/ui + Tailwind v4
 │   ├── environment/       # @packages/environment — loader .env (SSOT env)
 │   ├── db/                # @packages/db — Prisma ORM 7 (PostgreSQL)
-│   └── validators/        # @packages/validators — SSOT types + kontrak request/response API
+│   ├── validators/        # @packages/validators — SSOT types + kontrak request/response API
+│   └── client/            # @packages/client — typed API client (satu-satunya jalur web → api)
 ├── scripts/              # Script operasional (masih kosong)
 ├── configs/
 │   ├── typescript/       # @configs/typescript — preset tsconfig (base/node/nest/react)
@@ -57,12 +58,13 @@ Jangan pernah meng-copy konfigurasi antar workspace. Selalu **extend/import** da
 }
 ```
 
-| Preset                           | Untuk                                                                |
-| -------------------------------- | -------------------------------------------------------------------- |
-| `@configs/typescript/base.json`  | Default (ESNext + bundler resolution)                                |
-| `@configs/typescript/node.json`  | CLI / backend Node.js (`NodeNext` + `@types/node`)                   |
-| `@configs/typescript/nest.json`  | Backend NestJS (`node.json` + decorator metadata, output ke `dist/`) |
-| `@configs/typescript/react.json` | Frontend React (`jsx: react-jsx` + DOM lib)                          |
+| Preset                             | Untuk                                                                |
+| ---------------------------------- | -------------------------------------------------------------------- |
+| `@configs/typescript/base.json`    | Default (ESNext + bundler resolution)                                |
+| `@configs/typescript/browser.json` | Isomorphic lib yang menyentuh DOM (`fetch`, `URL`) — base + lib DOM  |
+| `@configs/typescript/node.json`    | CLI / backend Node.js (`NodeNext` + `@types/node`)                   |
+| `@configs/typescript/nest.json`    | Backend NestJS (`node.json` + decorator metadata, output ke `dist/`) |
+| `@configs/typescript/react.json`   | Frontend React (`jsx: react-jsx` + DOM lib)                          |
 
 ### ESLint
 
@@ -125,6 +127,7 @@ import { getEnv, requireEnv, environment } from '@packages/environment';
 - **App Next.js tidak perlu apa-apa** — `@configs/next` sudah meng-import package ini; `NEXT_PUBLIC_*` otomatis ter-inline saat build.
 - **App NestJS (`apps/api`)** meng-import package ini sekali di `main.ts` sebelum bootstrap; endpoint membaca env lewat `environment` / `getEnv`.
 - **Port server** juga hidup di sini: `WEB_PORT`, `ADMIN_PORT`, `API_PORT`. Next.js dibaca lewat bin `next-app` (`@configs/next`), API lewat `process.env.API_PORT`; shell tetap bisa override (precedence menang).
+- **Base URL API client**: `NEXT_PUBLIC_API_URL` (di-inline Next ke bundle; dev = `http://localhost:3002` via `.env.development`, dasar = URL publik). Berbeda dari `API_BASE_URL` — alamat yang dilaporkan API tentang dirinya sendiri (field `baseUrl` di `GET /`).
 - **Koneksi database**: `DATABASE_URL`, `POSTGRES_URL`, `PRISMA_DATABASE_URL` (nilainya sama). Dibaca `@packages/db` via `prisma.config.ts` yang meng-import `@packages/environment` — sama seperti consumer lain, Prisma tidak punya loader `.env` sendiri.
 - Precedence: `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` (yang belakangan menang); variabel yang sudah ada di `process.env` (shell/CI) **selalu** menang.
 - Mode mengikuti `NODE_ENV` (default `development`).
@@ -162,6 +165,27 @@ import {
 
 Cara menambah kontrak & detail pemakaian (server/client): lihat [`packages/validators/README.md`](packages/validators/README.md).
 
+## API Client (`@packages/client`)
+
+`packages/client` adalah **satu-satunya cara resmi** aplikasi web memanggil REST API `apps/api` — typed, dan request/response di-unwrap dari envelope `{ data }` serta **divalidasi otomatis** oleh schema Zod dari `@packages/validators` (client tidak punya definisi tipe sendiri).
+
+```ts
+import { apiClient, ApiHttpError } from '@packages/client';
+
+const health = await apiClient.getHealth(); // Promise<HealthResponse> — tervalidasi
+try {
+  await apiClient.getHealth();
+} catch (e) {
+  if (e instanceof ApiHttpError) console.error(e.status, e.code, e.message);
+}
+```
+
+- Base URL: `NEXT_PUBLIC_API_URL` (root `.env*`, di-inline Next; dev = `http://localhost:3002`) → fallback `http://localhost:3002`.
+- Error terketik: `ApiTransportError` (jaringan), `ApiHttpError` (non-2xx, envelope error terkontrak), `ApiValidationError` (tak sesuai schema/envelope).
+- Browser → API lintas-origin didukung `app.enableCors()` di `apps/api`.
+
+Detail (alur request, cara menambah endpoint, perintah): lihat [`packages/client/README.md`](packages/client/README.md).
+
 ## Aplikasi
 
 | App          | Port | Peran                     | README                                         |
@@ -196,6 +220,7 @@ Cara menambah kontrak & detail pemakaian (server/client): lihat [`packages/valid
 - Konfigurasi hidup **hanya** di `configs/` — workspace lain hanya extend/import.
 - Nilai environment hidup **hanya** di file `.env*` root — jangan membuat `.env` lokal di app/package.
 - Kontrak request/response API (interface + Zod schema + class-validator DTO) hidup **hanya** di `packages/validators` — apps import dari sana, jangan deklarasikan ulang.
+- Komunikasi web → API **hanya** lewat `@packages/client` — jangan memanggil `fetch()` ke `apps/api` secara langsung.
 - Dependency dipasang di workspace yang **langsung** menggunakannya; versi yang dipakai bersama harus konsisten.
 - Referensi antar workspace selalu pakai protokol `workspace:*`.
 - `pnpm-lock.yaml` adalah satu-satunya sumber kebenaran resolusi dependency — jangan commit `node_modules/`.
@@ -213,3 +238,4 @@ Cara menambah kontrak & detail pemakaian (server/client): lihat [`packages/valid
 - **NestJS** — preset `@configs/typescript/nest.json` memakai `emitDecoratorMetadata` + `experimentalDecorators` (wajib untuk DI Nest; opsi legacy) dan meng-extend `node.json` (`NodeNext`) tanpa `"type": "module"`, sehingga output tetap CommonJS dengan resolusi modern. Jangan ganti builder ke SWC/esbuild tanpa plugin yang mendukung decorator metadata.
 - **Prisma** — dikunci di v7 (`prisma@^7`): URL pindah dari schema ke `prisma.config.ts`, klien wajib driver adapter (`PrismaPg`), dan generator `prisma-client` output ke folder di repo (bukan `node_modules`). Naik ke v8 (`prisma@latest`) butuh config shape baru (`definePrismaConfig`) dan rename API (`.limit/.offset`, `db.raw.sql`) — lakukan terpisah saat diperlukan.
 - **`@packages/validators`** — tsconfig extends preset `nest` (butuh `experimentalDecorators`/`emitDecoratorMetadata` untuk DTO class-validator) tetapi `types: []` + ESLint preset `base` (murni, browser-safe). Paket di-build ke `dist/` CJS seperti `@packages/db`; task `typecheck` Turbo sudah `dependsOn: ["^typecheck", "^build"]` supaya dist konsumen tersedia.
+- **`@packages/client`** — preset baru `browser.json` (base + lib DOM) lalu di-override `module: NodeNext` untuk emit CJS. `NEXT_PUBLIC_API_URL` hanya di-inline oleh Next; di Node (smoke/tes) dibaca dari `process.env` runtime lewat deklarasi lokal `env.d.ts` (package sengaja tanpa `@types/node`).

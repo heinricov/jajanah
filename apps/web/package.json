@@ -9,8 +9,8 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@packages/client": "workspace:*",
     "@packages/ui": "workspace:*",
-    "@packages/validators": "workspace:*",
     "next": "^16.3.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

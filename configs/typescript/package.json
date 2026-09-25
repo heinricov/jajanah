@@ -5,6 +5,7 @@
   "exports": {
     ".": "./base.json",
     "./base.json": "./base.json",
+    "./browser.json": "./browser.json",
     "./node.json": "./node.json",
     "./nest.json": "./nest.json",
     "./react.json": "./react.json"

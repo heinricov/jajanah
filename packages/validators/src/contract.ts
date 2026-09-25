@@ -19,14 +19,17 @@ export interface ApiErrorEnvelope {
   error: ApiError;
 }
 
-export type ApiErrorCode =
-  | 'BAD_REQUEST'
-  | 'VALIDATION'
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'NOT_FOUND'
-  | 'CONFLICT'
-  | 'INTERNAL';
+export const API_ERROR_CODES = [
+  'BAD_REQUEST',
+  'VALIDATION',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'CONFLICT',
+  'INTERNAL',
+] as const;
+
+export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
 
 export type ApiResponse<T> = ApiEnvelope<T> | PaginatedEnvelope<T> | ApiErrorEnvelope;
 

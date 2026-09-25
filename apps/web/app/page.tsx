@@ -1,4 +1,3 @@
-import { healthResponseSchema, type HealthResponse } from '@packages/validators';
 import { Badge } from '@packages/ui/components/badge';
 import { Button } from '@packages/ui/components/button';
 import {
@@ -10,13 +9,7 @@ import {
 } from '@packages/ui/components/card';
 import { Input } from '@packages/ui/components/input';
 
-const contractSample: HealthResponse = {
-  service: 'api',
-  status: 'ok',
-  mode: 'contract-check',
-  appName: null,
-  baseUrl: null,
-};
+import { HealthStatus } from '@/components/health-status';
 
 export default function HomePage() {
   return (
@@ -45,10 +38,7 @@ export default function HomePage() {
       <p className="text-xs text-muted-foreground">
         NEXT_PUBLIC_APP_NAME = {process.env.NEXT_PUBLIC_APP_NAME ?? '(belum di-set)'}
       </p>
-      <p className="text-xs text-muted-foreground">
-        Kontrak API (@packages/validators):{' '}
-        {healthResponseSchema.safeParse(contractSample).success ? 'valid' : 'tidak valid'}
-      </p>
+      <HealthStatus />
     </main>
   );
 }

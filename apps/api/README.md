@@ -25,7 +25,7 @@ apps/api/
 ├── tsconfig.build.json   # untuk `nest build` — exclude *.spec.ts
 ├── eslint.config.mjs     # re-export @configs/eslint/nest (SSOT)
 └── src/
-    ├── main.ts           # import reflect-metadata + @packages/environment → bootstrap (port API_PORT) + ValidationPipe global
+    ├── main.ts           # import reflect-metadata + @packages/environment → bootstrap (port API_PORT) + enableCors() + ValidationPipe global
     ├── app.module.ts     # root module
     ├── app.controller.ts # GET / → envelope { data: HealthResponse } (dikontrak @packages/validators)
     ├── app.service.ts    # membaca env via `environment`/`getEnv` (@packages/environment), return type HealthResponse
@@ -38,6 +38,8 @@ apps/api/
 | Method | Path | Deskripsi                                                                                    |
 | ------ | ---- | -------------------------------------------------------------------------------------------- |
 | `GET`  | `/`  | `{ data: { service, status, mode, appName, baseUrl } }` — di-validate `healthResponseSchema` |
+
+> CORS aktif (`app.enableCors()` di `main.ts`) supaya browser web/admin (`:3000`/`:3001`) boleh memanggil API via `@packages/client`. Untuk produksi, pertimbangkan membatasi origin lewat env.
 
 ## Kontrak request/response (SSOT)
 
