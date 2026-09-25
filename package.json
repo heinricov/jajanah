@@ -1,0 +1,28 @@
+{
+  "name": "jajanah",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint lint:root",
+    "lint:root": "eslint .",
+    "typecheck": "turbo run typecheck",
+    "check": "turbo run lint lint:root typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@configs/eslint": "workspace:*",
+    "@configs/prettier": "workspace:*",
+    "@configs/typescript": "workspace:*",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
+    "turbo": "^2.11.4",
+    "typescript": "~5.9.3"
+  },
+  "prettier": "@configs/prettier"
+}
