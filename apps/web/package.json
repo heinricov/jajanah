@@ -2,9 +2,9 @@
   "name": "web",
   "private": true,
   "scripts": {
-    "dev": "next-app WEB_PORT dev 3000",
+    "dev": "next-app WEB_PORT dev",
     "build": "next build",
-    "start": "next-app WEB_PORT start 3000",
+    "start": "next-app WEB_PORT start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit"
   },

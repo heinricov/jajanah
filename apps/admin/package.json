@@ -2,9 +2,9 @@
   "name": "admin",
   "private": true,
   "scripts": {
-    "dev": "next-app ADMIN_PORT dev 3001",
+    "dev": "next-app ADMIN_PORT dev",
     "build": "next build",
-    "start": "next-app ADMIN_PORT start 3001",
+    "start": "next-app ADMIN_PORT start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit"
   },
