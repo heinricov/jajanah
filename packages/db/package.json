@@ -16,6 +16,7 @@
     "typecheck": "prisma generate && tsc --noEmit",
     "generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:seed": "pnpm build && pnpm --filter @packages/auth build && prisma db seed",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio"

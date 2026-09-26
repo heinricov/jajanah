@@ -84,6 +84,7 @@ packages/auth/
     ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256) + TTL
     ├── errors.ts         # AuthError { code, status }
     ├── auth.service.ts   # register / login / logout / authenticate (pakai prisma)
+    ├── seed.ts           # seed idempotent admin + user demo (dijalankan dari @packages/db)
     ├── password.spec.ts  # roundtrip, salt unik, stored hash rusak
     ├── token.spec.ts     # roundtrip, tamper, expired, alg pinning, secret salah
     └── auth.service.spec.ts  # skenario DB via jest.mock('@packages/db')
@@ -104,4 +105,5 @@ packages/auth/
 - Konsumen menambahkan `"@packages/auth": "workspace:*"`; `dist/` di-ignore — jalankan `pnpm build` (Turbo mengurutkan `^build` dulu).
 - Unit test **mem-mock `@packages/db`** (`jest.mock`) supaya tidak butuh koneksi DB & aman di CI (tanpa `.env`).
 - Batas panjang password (8..128) didefinisikan di `@packages/validators` (schema + DTO) — `password.ts` hanya mengekspor konstanta pendampingnya.
+- **Seed data** ada di `src/seed.ts` (akun admin + user demo, idempotent) dan dijalankan lewat `pnpm --filter @packages/db db:seed` (`prisma db seed` → `node ../auth/dist/seed.js`). Ada di package ini — bukan `@packages/db` — karena `db → auth` akan membuat siklus task Turbo.
 - Menambah field sesi baru: ubah `schema.prisma` (`Session`) → `pnpm --filter @packages/db migrate` → sesuaikan `auth.service.ts`.

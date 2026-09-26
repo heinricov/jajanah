@@ -72,10 +72,29 @@ Menambahkan dependency workspace di app:
 | `pnpm --filter @packages/db migrate`        | Buat/jalankan migration (`migrate dev`)    |
 | `pnpm --filter @packages/db migrate:deploy` | Jalankan migration di environment lain     |
 | `pnpm --filter @packages/db db:push`        | Push schema tanpa migration (prototyping)  |
+| `pnpm --filter @packages/db db:seed`        | Isi seed akun (idempotent, lihat bawah)    |
 | `pnpm --filter @packages/db studio`         | Prisma Studio (GUI)                        |
 | `pnpm --filter @packages/db lint`           | ESLint (`@configs/eslint/node`)            |
 | `pnpm --filter @packages/db typecheck`      | `tsc --noEmit` (generate dulu)             |
 | `pnpm --filter @packages/db build`          | Generate + compile ke `dist/`              |
+
+## Seed data
+
+Isi awal domain auth — **idempotent**: akun yang sudah ada di-skip (password & sesi yang hidup tidak disentuh), aman dijalankan berulang.
+
+| Email                 | Nama          | Password   | Role  |
+| --------------------- | ------------- | ---------- | ----- |
+| `admin@jajanah.local` | Admin Jajanah | `admin123` | ADMIN |
+| `user@jajanah.local`  | User Demo     | `user1234` | USER  |
+
+```bash
+pnpm --filter @packages/db db:seed
+```
+
+- Sumber seed ada di [`packages/auth/src/seed.ts`](../auth/README.md) (domain pemilik data `Auth`) — **sengaja di `@packages/auth`**, bukan di package ini: `db → auth` akan membuat siklus task Turbo, sedangkan arah `auth → db` sudah ada.
+- Mekanisme: script `db:seed` mem-build package ini + `@packages/auth`, lalu `prisma db seed` menjalankan `migrations.seed` di `prisma.config.ts` (`node ../auth/dist/seed.js`).
+- Hash memakai `hashPassword` dari `@packages/auth` (SSOT) — akun seed pasti bisa login via `POST /auth/login`.
+- Menambah akun: edit `ACCOUNTS` di `packages/auth/src/seed.ts` → jalankan `db:seed` lagi.
 
 ## Catatan
 

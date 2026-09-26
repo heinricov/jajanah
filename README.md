@@ -146,7 +146,7 @@ Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menamb
 import { prisma } from '@packages/db';
 ```
 
-Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate`. Detail lengkap (struktur, cara menambah model): lihat [`packages/db/README.md`](packages/db/README.md).
+Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate|db:seed`. **Seed** (`db:seed`, sumber di `packages/auth/src/seed.ts`) mengisi akun awal idempoten — `admin@jajanah.local`/`admin123` (ADMIN) + `user@jajanah.local`/`user1234` (USER) — memakai `hashPassword` dari `@packages/auth`, jadi langsung bisa login. Detail lengkap (struktur, cara menambah model, seed): lihat [`packages/db/README.md`](packages/db/README.md).
 
 ## API Contracts (`@packages/validators`)
 
