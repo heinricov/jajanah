@@ -25,20 +25,35 @@ apps/api/
 ├── tsconfig.build.json   # untuk `nest build` — exclude *.spec.ts
 ├── eslint.config.mjs     # re-export @configs/eslint/nest (SSOT)
 └── src/
-    ├── main.ts           # import reflect-metadata + @packages/environment → bootstrap (port API_PORT) + useLogger + request logger + enableCors() + ValidationPipe global
+    ├── main.ts           # import reflect-metadata + @packages/environment → bootstrap (port API_PORT) + useLogger + request logger + enableCors() + ValidationPipe global + AllExceptionsFilter
     ├── logger.ts         # glue @packages/logger: level/format dari getEnv(LOG_LEVEL/LOG_FORMAT)
-    ├── app.module.ts     # root module
+    ├── app.module.ts     # root module (AppController + AuthController)
     ├── app.controller.ts # GET / → envelope { data: HealthResponse } (dikontrak @packages/validators)
     ├── app.service.ts    # membaca env via `environment`/`getEnv` (@packages/environment), return type HealthResponse
+    ├── auth/
+    │   ├── auth.controller.ts     # POST /auth/register|login|logout + GET /auth/me
+    │   ├── auth.guard.ts          # Bearer JWT → authService.authenticate → attach user + updateContext({ userId })
+    │   ├── current-user.decorator.ts  # @CurrentUser() / @AuthToken()
+    │   ├── auth.controller.spec.ts    # unit test envelope + konteks request
+    │   └── auth.guard.spec.ts         # unit test header Bearer & alur gagal
+    ├── filters/
+    │   ├── all-exceptions.filter.ts   # AuthError/HttpException → envelope { error } SSOT
+    │   └── all-exceptions.filter.spec.ts
     ├── app.controller.spec.ts        # unit test envelope response
     └── pagination-query.dto.spec.ts  # unit test validasi request (class-validator via ValidationPipe)
 ```
 
 ## Endpoint
 
-| Method | Path | Deskripsi                                                                                    |
-| ------ | ---- | -------------------------------------------------------------------------------------------- |
-| `GET`  | `/`  | `{ data: { service, status, mode, appName, baseUrl } }` — di-validate `healthResponseSchema` |
+| Method | Path             | Auth   | Deskripsi                                                                                    |
+| ------ | ---------------- | ------ | -------------------------------------------------------------------------------------------- |
+| `GET`  | `/`              | —      | `{ data: { service, status, mode, appName, baseUrl } }` — di-validate `healthResponseSchema` |
+| `POST` | `/auth/register` | —      | `{ data: AuthUser }` — buat akun (password discrypt, email ternormalisasi); 201              |
+| `POST` | `/auth/login`    | —      | `{ data: { token, expiresAt, user } }` — JWT sesi + row `Session`; 401 `INVALID_CREDENTIALS` |
+| `POST` | `/auth/logout`   | Bearer | `{ data: null }` — hapus sesi (revoke `jti`); 401 bila token kedaluwarsa                     |
+| `GET`  | `/auth/me`       | Bearer | `{ data: AuthUser }` — user di balik token; 401 `UNAUTHORIZED`                               |
+
+Endpoint bertanda **Bearer** memakai `AuthGuard` (`Authorization: Bearer <JWT>`): gagal verifikasi → `AuthError` → exception filter → envelope error terkontrak. Logika auth (hash, JWT, sesi) hidup di [`@packages/auth`](../../packages/auth/README.md) — app ini hanya HTTP-nya.
 
 > CORS aktif (`app.enableCors()` di `main.ts`) supaya browser web/admin (`:3000`/`:3001`) boleh memanggil API via `@packages/client`. Untuk produksi, pertimbangkan membatasi origin lewat env.
 
@@ -55,9 +70,9 @@ apps/api/
 
 Semua bentuk request & response didefinisikan **hanya** di `@packages/validators` (interface kanonik + Zod schema + class-validator DTO):
 
-- **Response** — controller parse via `healthResponseSchema.parse(...)` lalu `ok(data)` → envelope `{ data }` baku.
-- **Request** — `main.ts` memasang `ValidationPipe({ transform: true, whitelist: true })`; endpoint masa depan memakai DTO dari `@packages/validators` (mis. `PaginationQueryDto`) — teruji di `pagination-query.dto.spec.ts`.
-- Bentuk error baku: `{ error: { status, code, message, details? } }` via helper `apiError()` / `validationError()`.
+- **Response** — controller parse via `healthResponseSchema.parse(...)` / `authUserSchema.parse(...)` lalu `ok(data)` → envelope `{ data }` baku.
+- **Request** — `main.ts` memasang `ValidationPipe({ transform: true, whitelist: true })`; endpoint auth memakai `RegisterRequestDto`/`LoginRequestDto`, endpoint lain `PaginationQueryDto` — teruji di `pagination-query.dto.spec.ts`.
+- Bentuk error baku: `{ error: { status, code, message, details? } }` via helper `apiError()` / `validationError()` — diterapkan oleh `AllExceptionsFilter` (juga menerjemahkan `AuthError` domain & error validasi Nest ke kode SSOT; error tak terduga → 500 `INTERNAL` tanpa membocorkan detail internal).
 
 ## Aturan SSOT
 

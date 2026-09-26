@@ -113,3 +113,106 @@ describe('ApiClient', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('ApiClient auth endpoints', () => {
+  const authUser = {
+    id: '3f1d3f2e-1c5a-4b7e-9d2a-8f6b5c4e3a21',
+    name: 'Budi',
+    email: 'budi@example.com',
+    role: 'USER',
+    lastLoginAt: null,
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  const loginData = {
+    token: 'header.payload.signature',
+    expiresAt: '2026-09-03T00:00:00.000Z',
+    user: authUser,
+  };
+
+  it('register — POST body dan unwrap envelope AuthUser', async () => {
+    const fetchMock = jest.fn(async () => jsonResponse({ data: authUser }));
+    const client = makeClient(fetchMock);
+
+    const user = await client.register({
+      name: 'Budi',
+      email: 'budi@example.com',
+      password: 'password123',
+    });
+
+    expect(user.email).toBe('budi@example.com');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/auth/register',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Budi',
+          email: 'budi@example.com',
+          password: 'password123',
+        }),
+      }),
+    );
+  });
+
+  it('login — mengembalikan token + user tervalidasi schema', async () => {
+    const fetchMock = jest.fn(async (_url: string, _init?: RequestInit) =>
+      jsonResponse({ data: loginData }),
+    );
+    const client = makeClient(fetchMock);
+
+    const result = await client.login({ email: 'budi@example.com', password: 'password123' });
+
+    expect(result.token).toBe(loginData.token);
+    expect(result.user.id).toBe(authUser.id);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://api.test/auth/login');
+  });
+
+  it('login — error 401 INVALID_CREDENTIALS menjadi ApiHttpError terketik', async () => {
+    const errorBody = {
+      error: { status: 401, code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' },
+    };
+    const fetchMock = jest.fn(async () => jsonResponse(errorBody, 401));
+    const client = makeClient(fetchMock);
+
+    const error = await client
+      .login({ email: 'budi@example.com', password: 'salah123' })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiHttpError);
+    expect((error as ApiHttpError).code).toBe('INVALID_CREDENTIALS');
+    expect((error as ApiHttpError).status).toBe(401);
+  });
+
+  it('me — membawa header Authorization Bearer', async () => {
+    const fetchMock = jest.fn(async () => jsonResponse({ data: authUser }));
+    const client = makeClient(fetchMock);
+
+    await client.me('token-aktif');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/auth/me',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ authorization: 'Bearer token-aktif' }),
+      }),
+    );
+  });
+
+  it('logout — POST dengan Bearer token dan mengembalikan null', async () => {
+    const fetchMock = jest.fn(async () => jsonResponse({ data: null }));
+    const client = makeClient(fetchMock);
+
+    const result = await client.logout('token-aktif');
+
+    expect(result).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/auth/logout',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ authorization: 'Bearer token-aktif' }),
+      }),
+    );
+  });
+});

@@ -33,6 +33,28 @@ import { createApiClient } from '@packages/client';
 const client = createApiClient({ baseUrl: 'http://localhost:3002', fetch: mockFetch });
 ```
 
+### Endpoint auth
+
+```ts
+// Register → AuthUser (login terpisah); Login → { token, expiresAt, user }
+const user = await apiClient.register({ name, email, password });
+const { token, expiresAt, user: me } = await apiClient.login({ email, password });
+
+// Endpoint yang butuh token → kirim per-panggilan (stateless; penyimpanan token = urusan app)
+const profile = await apiClient.me(token); // GET /auth/me
+await apiClient.logout(token); // POST /auth/logout → null (revoke sesi server)
+
+try {
+  await apiClient.login({ email, password });
+} catch (error) {
+  if (error instanceof ApiHttpError && error.code === 'INVALID_CREDENTIALS') {
+    // 401 — email/password salah (kode dari @packages/validators, SSOT)
+  }
+}
+```
+
+> Penyimpanan token (cookie/httpOnly, dsb.) **bukan** tanggung jawab package ini — client hanya menerima/mengirim token per-panggilan.
+
 ### Base URL
 
 Diurutkan dari: `options.baseUrl` → `NEXT_PUBLIC_API_URL` (root `.env*`, di-inline oleh Next saat build) → fallback `http://localhost:3002`.
@@ -74,7 +96,7 @@ packages/client/
 ├── eslint.config.mjs     # re-export @configs/eslint/base
 └── src/
     ├── index.ts          # export apiClient, createApiClient, ApiClient, errors
-    ├── client.ts         # class ApiClient: buildUrl, fetch, envelope unwrap, validasi
+    ├── client.ts         # class ApiClient: buildUrl, fetch, envelope unwrap, validasi + getHealth/register/login/logout/me
     ├── errors.ts         # ApiClientError → ApiTransportError / ApiHttpError / ApiValidationError
     ├── env.d.ts          # deklarasi process.env.NEXT_PUBLIC_API_URL (tanpa @types/node)
     └── client.spec.ts    # unit test (mock fetch: success/error/validation/network/query)

@@ -1,9 +1,15 @@
 import {
   apiErrorEnvelopeSchema,
+  authUserSchema,
   healthResponseSchema,
+  loginResponseSchema,
   paginationParamsSchema,
+  type AuthUser,
   type HealthResponse,
+  type LoginRequest,
+  type LoginResponse,
   type PaginationParams,
+  type RegisterRequest,
 } from '@packages/validators';
 import { z } from 'zod';
 
@@ -65,6 +71,31 @@ export class ApiClient {
   /** GET / — status layanan (terkontrak `healthResponseSchema`). */
   getHealth(): Promise<HealthResponse> {
     return this.request('/', healthResponseSchema);
+  }
+
+  /** POST /auth/register — buat akun baru; balas `AuthUser` (login terpisah). */
+  register(request: RegisterRequest): Promise<AuthUser> {
+    return this.request('/auth/register', authUserSchema, { method: 'POST', body: request });
+  }
+
+  /** POST /auth/login — balas JWT sesi + `AuthUser`; `EMAIL_TAKEN`/`INVALID_CREDENTIALS` jadi `ApiHttpError`. */
+  login(request: LoginRequest): Promise<LoginResponse> {
+    return this.request('/auth/login', loginResponseSchema, { method: 'POST', body: request });
+  }
+
+  /** POST /auth/logout — cabut sesi server-side (revoke via kolom `Session.token`). */
+  logout(token: string): Promise<null> {
+    return this.request('/auth/logout', z.null(), {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}` },
+    });
+  }
+
+  /** GET /auth/me — `AuthUser` di balik token; 401 bila token kedaluwarsa/tercabut. */
+  me(token: string): Promise<AuthUser> {
+    return this.request('/auth/me', authUserSchema, {
+      headers: { authorization: `Bearer ${token}` },
+    });
   }
 
   /**

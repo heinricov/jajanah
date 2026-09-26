@@ -26,6 +26,8 @@ export const API_ERROR_CODES = [
   'FORBIDDEN',
   'NOT_FOUND',
   'CONFLICT',
+  'EMAIL_TAKEN',
+  'INVALID_CREDENTIALS',
   'INTERNAL',
 ] as const;
 

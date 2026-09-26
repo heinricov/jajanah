@@ -6,7 +6,7 @@ Akses database PostgreSQL monorepo via [Prisma ORM 7](https://www.prisma.io) (Ve
 
 - **Env**: `prisma.config.ts` dan `src/client.ts` meng-import `@packages/environment`, sehingga `DATABASE_URL` dibaca dari file `.env*` **root repo** (satu sumber dengan app lain). Prisma 7 tidak lagi auto-load `.env` — jangan tambahkan `.env` lokal di package ini.
 - **Konfigurasi**: `tsconfig.json` extend `@configs/typescript/node.json`, `eslint.config.mjs` re-export `@configs/eslint/node` — tanpa compilerOptions/rule duplikat.
-- **Schema**: `prisma/schema.prisma` hanya deklarasi `datasource` (provider) + `generator`; URL koneksi **tidak** ada di schema (Prisma 7 memindahkannya ke `prisma.config.ts`).
+- **Schema**: `prisma/schema.prisma` hanya deklarasi `datasource` (provider) + `generator` + model (`enum Role`, `Auth`, `Session`); URL koneksi **tidak** ada di schema (Prisma 7 memindahkannya ke `prisma.config.ts`).
 - **Generated client**: output ke `src/generated/prisma/` (di-ignore `.gitignore` & `.prettierignore`) — jangan di-commit atau di-edit manual.
 
 ## Struktur
@@ -15,7 +15,8 @@ Akses database PostgreSQL monorepo via [Prisma ORM 7](https://www.prisma.io) (Ve
 packages/db/
 ├── prisma.config.ts        # konfigurasi Prisma CLI (datasource.url ← DATABASE_URL root .env)
 ├── prisma/
-│   └── schema.prisma       # provider postgresql + generator prisma-client (belum ada model)
+│   ├── schema.prisma       # enum Role + model Auth & Session (domain auth)
+│   └── migrations/         # migration versioned (`migrate dev` / `migrate:deploy`)
 ├── src/
 │   ├── index.ts            # entry: export { prisma, createPrisma, PrismaClient }
 │   ├── client.ts           # adapter @prisma/adapter-pg + singleton PrismaClient
@@ -46,6 +47,15 @@ Menambahkan dependency workspace di app:
   }
 }
 ```
+
+## Model
+
+| Model     | Field                                                                                                                                                                               |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Auth`    | `id` (uuid) · `name` · `email` (unique) · `password` · `role` (`Role` enum, default `USER`) · `lastLoginAt?` · `isActive` · `createdAt` · `updatedAt` — relasi `sessions Session[]` |
+| `Session` | `id` (uuid) · `authId` (uuid, FK → `Auth`, cascade delete) · `token` (unique — menyimpan `jti` JWT) · `expiresAt` · `authAgent?` · `ipAddress?` · `createdAt`                       |
+
+`enum Role { USER ADMIN }` — nilai tipe di-SSOT-kan dengan `Role` di `@packages/validators` (interface `AuthUser`). Logika di atas model ini hidup di [`@packages/auth`](../auth/README.md).
 
 ## Menambah model
 

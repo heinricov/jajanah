@@ -44,7 +44,7 @@ Didefinisikan di `src/contract.ts` + helper-nya:
 | Paginated | `{ data: T[], meta: { page, limit, total, totalPages, hasNext, hasPrevious } }` | `paginated(rows, createPaginationMeta(params, total))` |
 | Error     | `{ error: { status, code, message, details? } }`                                | `apiError()` / `validationError()` / `notFoundError()` |
 
-`code` union: `VALIDATION | BAD_REQUEST | UNAUTHORIZED | FORBIDDEN | NOT_FOUND | CONFLICT | INTERNAL`; status ada di konstanta `httpStatus`.
+`code` union: `VALIDATION | BAD_REQUEST | UNAUTHORIZED | FORBIDDEN | NOT_FOUND | CONFLICT | EMAIL_TAKEN | INVALID_CREDENTIALS | INTERNAL`; status ada di konstanta `httpStatus`. (`EMAIL_TAKEN`/`INVALID_CREDENTIALS` dipakai domain auth `@packages/auth` → diterjemahkan exception filter `apps/api`.)
 
 ## Pemakaian
 
@@ -92,9 +92,9 @@ packages/validators/
 └── src/
     ├── index.ts          # re-export semua
     ├── contract.ts       # envelope + helpers + httpStatus + ErrorCode
-    ├── types/            # interface kanonik (HealthResponse, PaginationParams, PaginationMeta)
-    ├── schemas/          # Zod (healthResponseSchema, paginationParamsSchema, paginationMetaSchema)
-    └── dtos/             # class-validator (PaginationQueryDto)
+    ├── types/            # interface kanonik (HealthResponse, AuthUser, RegisterRequest, LoginRequest, LoginResponse, Pagination*)
+    ├── schemas/          # Zod (authUserSchema, loginResponseSchema, registerRequestSchema, health, pagination)
+    └── dtos/             # class-validator (RegisterRequestDto, LoginRequestDto, PaginationQueryDto)
 ```
 
 ## Perintah
