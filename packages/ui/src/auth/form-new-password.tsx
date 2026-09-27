@@ -1,18 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+
 import { cn } from '@packages/ui/lib/utils';
 import { Button } from '@packages/ui/components/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@packages/ui/components/card';
 import { Field, FieldLabel } from '@packages/ui/components/field';
 import { Input } from '@packages/ui/components/input';
 import { Check, X } from 'lucide-react';
+import { AuthCard } from './auth-card';
 
 function Rule({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -27,7 +22,25 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-export function FormNewPassword() {
+export type FormNewPasswordProps = {
+  onSubmit?: (values: { password: string }) => void | Promise<void>;
+  isPending?: boolean;
+  continueHref?: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  doneTitle?: React.ReactNode;
+  doneDescription?: React.ReactNode;
+};
+
+export function FormNewPassword({
+  onSubmit,
+  isPending = false,
+  continueHref = '/auth/login',
+  title = 'Set a new password',
+  description = "Choose a strong password you don't use anywhere else.",
+  doneTitle = 'Password updated',
+  doneDescription = 'Your password has been changed. You can sign in with it now.',
+}: FormNewPasswordProps) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [done, setDone] = useState(false);
@@ -38,73 +51,59 @@ export function FormNewPassword() {
   const matches = confirm.length > 0 && password === confirm;
   const valid = hasLength && hasNumber && hasUpper && matches;
 
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!valid) return;
+    await onSubmit?.({ password });
+    setDone(true);
+  }
+
   return (
-    <section className="flex w-full items-center justify-center bg-background px-6 py-12 text-foreground">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl font-bold tracking-tight">
-            {done ? 'Password updated' : 'Set a new password'}
-          </CardTitle>
-          <CardDescription className="text-sm">
-            {done
-              ? 'Your password has been changed. You can sign in with it now.'
-              : "Choose a strong password you don't use anywhere else."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {done ? (
-            <Button className="w-full" render={<a href="#" />} nativeButton={false}>
-              Continue to sign in
-            </Button>
-          ) : (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (valid) setDone(true);
-              }}
-              noValidate
-              className="flex flex-col gap-4"
-            >
-              <Field>
-                <FieldLabel htmlFor="password">New password</FieldLabel>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
-                <Input
-                  id="confirm"
-                  name="confirm"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirm}
-                  aria-invalid={confirm.length > 0 && !matches}
-                  onChange={(event) => setConfirm(event.target.value)}
-                />
-              </Field>
-              <ul className="flex flex-col gap-1.5">
-                <Rule ok={hasLength} label="At least 8 characters" />
-                <Rule ok={hasUpper} label="One uppercase letter" />
-                <Rule ok={hasNumber} label="One number" />
-                <Rule ok={matches} label="Passwords match" />
-              </ul>
-              <Button
-                type="submit"
-                className={cn('w-full', !valid && 'opacity-60')}
-                disabled={!valid}
-              >
-                Update password
-              </Button>
-            </form>
-          )}
-        </CardContent>
-      </Card>
-    </section>
+    <AuthCard title={done ? doneTitle : title} description={done ? doneDescription : description}>
+      {done ? (
+        <Button className="w-full" asChild>
+          <a href={continueHref}>Continue to sign in</a>
+        </Button>
+      ) : (
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+          <Field>
+            <FieldLabel htmlFor="password">New password</FieldLabel>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
+            <Input
+              id="confirm"
+              name="confirm"
+              type="password"
+              placeholder="••••••••"
+              value={confirm}
+              aria-invalid={confirm.length > 0 && !matches}
+              onChange={(event) => setConfirm(event.target.value)}
+            />
+          </Field>
+          <ul className="flex flex-col gap-1.5">
+            <Rule ok={hasLength} label="At least 8 characters" />
+            <Rule ok={hasUpper} label="One uppercase letter" />
+            <Rule ok={hasNumber} label="One number" />
+            <Rule ok={matches} label="Passwords match" />
+          </ul>
+          <Button
+            type="submit"
+            className={cn('w-full', !valid && 'opacity-60')}
+            disabled={!valid || isPending}
+          >
+            {isPending ? 'Updating…' : 'Update password'}
+          </Button>
+        </form>
+      )}
+    </AuthCard>
   );
 }

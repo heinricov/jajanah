@@ -1,29 +1,49 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@packages/ui/components/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@packages/ui/components/card';
 import { Checkbox } from '@packages/ui/components/checkbox';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@packages/ui/components/field';
 import { Input } from '@packages/ui/components/input';
 import { Separator } from '@packages/ui/components/separator';
-import { Toaster } from '@packages/ui/components/sonner';
+import { AuthCard } from './auth-card';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function FormRegister() {
+export type RegisterValues = {
+  name: string;
+  email: string;
+  password: string;
+  terms: boolean;
+};
+
+export type SocialProvider = 'google' | 'github';
+
+export type FormRegisterProps = {
+  onSubmit?: (values: RegisterValues) => void | Promise<void>;
+  onSocialSubmit?: (provider: SocialProvider) => void;
+  isPending?: boolean;
+  loginHref?: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  logo?: React.ReactNode;
+  footer?: React.ReactNode;
+};
+
+export function FormRegister({
+  onSubmit,
+  onSocialSubmit,
+  isPending = false,
+  loginHref = '/auth/login',
+  title = 'Create your account',
+  description = 'Start building with Acme. No credit card required.',
+  logo = <RegisterMark />,
+  footer,
+}: FormRegisterProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     const next: Record<string, string> = {};
@@ -33,10 +53,11 @@ export function FormRegister() {
     if (!data.terms) next.terms = 'Please accept the terms to continue';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    toast.promise(new Promise((resolve) => setTimeout(resolve, 1400)), {
-      loading: 'Creating your account…',
-      success: 'Welcome to Acme!',
-      error: 'Something went wrong. Please try again.',
+    await onSubmit?.({
+      name: data.name!.trim(),
+      email: data.email!,
+      password: data.password!,
+      terms: true,
     });
   }
 
@@ -50,121 +71,119 @@ export function FormRegister() {
   }
 
   return (
-    <section className="flex w-full items-center justify-center bg-background px-6 py-12 text-foreground">
-      <Toaster />
-      <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
-          <svg
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden="true"
-            className="mx-auto size-7 shrink-0 text-primary"
-          >
-            <rect x="3" y="3" width="8" height="8" transform="rotate(-6 7 7)" />
-            <rect x="3" y="13" width="8" height="8" transform="rotate(5 7 17)" />
-            <rect x="13" y="13" width="8" height="8" transform="rotate(-4 17 17)" />
-            <rect x="13" y="3" width="8" height="8" transform="rotate(15 17 7)" />
-          </svg>
-          <CardTitle className="mt-4 text-xl font-bold tracking-tight">
-            Create your account
-          </CardTitle>
-          <CardDescription className="text-sm">
-            Start building with Acme. No credit card required.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="flex flex-col gap-6">
-          <form onSubmit={handleSubmit} noValidate>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="name">Full name</FieldLabel>
-                <Input
-                  id="name"
-                  name="name"
-                  placeholder="Ada Lovelace"
-                  aria-invalid={!!errors.name}
-                  onChange={() => clearError('name')}
-                />
-                <FieldError>{errors.name}</FieldError>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  aria-invalid={!!errors.email}
-                  onChange={() => clearError('email')}
-                />
-                <FieldError>{errors.email}</FieldError>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="password">Password</FieldLabel>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="At least 8 characters"
-                  aria-invalid={!!errors.password}
-                  onChange={() => clearError('password')}
-                />
-                <FieldError>{errors.password}</FieldError>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="terms" className="font-normal text-muted-foreground">
-                  <Checkbox
-                    id="terms"
-                    name="terms"
-                    aria-invalid={!!errors.terms}
-                    onCheckedChange={() => clearError('terms')}
-                  />
-                  I agree to the Terms and Privacy Policy
-                </FieldLabel>
-                <FieldError>{errors.terms}</FieldError>
-              </Field>
-              <Button type="submit" className="w-full">
-                Create account
-              </Button>
-            </FieldGroup>
-          </form>
-
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <Separator className="flex-1" />
-            Or sign up with
-            <Separator className="flex-1" />
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => toast('Continuing with Google…')}
-            >
-              <GoogleMark data-icon="inline-start" />
-              Google
+    <AuthCard
+      title={title}
+      description={description}
+      logo={logo}
+      footer={
+        footer ?? (
+          <>
+            Already have an account?
+            <Button variant="link" className="px-1" asChild>
+              <a href={loginHref}>Sign in</a>
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => toast('Continuing with GitHub…')}
-            >
-              <GithubMark data-icon="inline-start" />
-              GitHub
-            </Button>
-          </div>
-        </CardContent>
-
-        <CardFooter className="justify-center text-sm text-muted-foreground">
-          Already have an account?
-          <Button variant="link" className="px-1" render={<a href="#" />} nativeButton={false}>
-            Sign in
+          </>
+        )
+      }
+    >
+      <form onSubmit={handleSubmit} noValidate>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="name">Full name</FieldLabel>
+            <Input
+              id="name"
+              name="name"
+              placeholder="Ada Lovelace"
+              aria-invalid={!!errors.name}
+              onChange={() => clearError('name')}
+            />
+            <FieldError>{errors.name}</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="you@example.com"
+              aria-invalid={!!errors.email}
+              onChange={() => clearError('email')}
+            />
+            <FieldError>{errors.email}</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="At least 8 characters"
+              aria-invalid={!!errors.password}
+              onChange={() => clearError('password')}
+            />
+            <FieldError>{errors.password}</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="terms" className="font-normal text-muted-foreground">
+              <Checkbox
+                id="terms"
+                name="terms"
+                aria-invalid={!!errors.terms}
+                onCheckedChange={() => clearError('terms')}
+              />
+              I agree to the Terms and Privacy Policy
+            </FieldLabel>
+            <FieldError>{errors.terms}</FieldError>
+          </Field>
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? 'Creating your account…' : 'Create account'}
           </Button>
-        </CardFooter>
-      </Card>
-    </section>
+        </FieldGroup>
+      </form>
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <Separator className="flex-1" />
+        Or sign up with
+        <Separator className="flex-1" />
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={() => onSocialSubmit?.('google')}
+        >
+          <GoogleMark data-icon="inline-start" />
+          Google
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={() => onSocialSubmit?.('github')}
+        >
+          <GithubMark data-icon="inline-start" />
+          GitHub
+        </Button>
+      </div>
+    </AuthCard>
+  );
+}
+
+function RegisterMark() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className="mx-auto size-7 shrink-0 text-primary"
+    >
+      <rect x="3" y="3" width="8" height="8" transform="rotate(-6 7 7)" />
+      <rect x="3" y="13" width="8" height="8" transform="rotate(5 7 17)" />
+      <rect x="13" y="13" width="8" height="8" transform="rotate(-4 17 17)" />
+      <rect x="13" y="3" width="8" height="8" transform="rotate(15 17 7)" />
+    </svg>
   );
 }
 

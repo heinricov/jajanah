@@ -1,5 +1,11 @@
-export { FormLogin } from './form-login';
-export { FormRegister } from './form-register';
-export { FormForgotPassword } from './form-forgot-password';
-export { FormNewPassword } from './form-new-password';
-export { UserAuth } from './user-auth';
+export { AuthCard, type AuthCardProps } from './auth-card';
+export { FormLogin, type FormLoginProps } from './form-login';
+export {
+  FormRegister,
+  type FormRegisterProps,
+  type RegisterValues,
+  type SocialProvider,
+} from './form-register';
+export { FormForgotPassword, type FormForgotPasswordProps } from './form-forgot-password';
+export { FormNewPassword, type FormNewPasswordProps } from './form-new-password';
+export { UserAuth, type UserAuthProps, type UserAuthUser } from './user-auth';
