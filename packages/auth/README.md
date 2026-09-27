@@ -1,14 +1,18 @@
 # @packages/auth
 
-**SSOT domain otentikasi** — satu-satunya tempat logika register/login/logout/verifikasi token, hashing password, dan pembuatan sesi didefinisikan. `apps/api` cukup memanggil `authService` dari package ini (HTTP-nya tetap di api), sehingga tidak ada logika auth yang terpecah antar app.
+**SSOT otentikasi** — satu-satunya tempat logika register/login/logout/verifikasi token, hashing password, pembuatan sesi, dan integrasi auth ke app didefinisikan. Dua lapisan dalam satu package:
+
+- **`.` (root)** — mesin domain Node murni (`domain/`): `apps/api` cukup memanggil `authService`; HTTP-nya tetap di api.
+- **`/next`** — integrasi Next.js (`next/`): `AuthProvider`/`useAuth` (client), server actions + guards (server), dan konstanta cookie — dikonsumsi `apps/web` & `apps/admin`. **Tidak ada route handler `/api/auth/*` per-app**; semua aksi memanggil domain langsung.
 
 ```
 register/login  ─┐
 logout          ─┼─►  @packages/auth  ─►  @packages/db (Auth + Session)
 authenticate    ─┘        │
-                          ├─ password.ts  — scrypt + timingSafeEqual (zero-dep)
-                          ├─ token.ts     — JWT HS256 (jti → kolom Session.token)
-                          └─ errors.ts    — AuthError { code, status } → filter di apps/api
+                          ├─ domain/password.ts  — scrypt + timingSafeEqual (zero-dep)
+                          ├─ domain/token.ts     — JWT HS256 (jti → kolom Session.token)
+                          ├─ domain/errors.ts    — AuthError { code, status } → filter di apps/api
+                          └─ next/               — AuthProvider, server actions, guards, cookie (Next.js)
 ```
 
 ## Model sesi: JWT + Session (hybrid)
@@ -43,6 +47,46 @@ const currentUser = await authService.authenticate(token);
 await authService.logout(token);
 ```
 
+## Integrasi Next.js (`/next`)
+
+Subpath untuk `apps/web` & `apps/admin` — **source export** (`src/next/*.ts`), di-compile konsumen lewat `transpilePackages: ['@packages/auth']` (lihat `configs/next`):
+
+| Subpath                      | Isi                                                                                                          | Dipakai di                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| `@packages/auth/next`        | `AuthProvider`, `useAuth`, `authErrorMessage`                                                                | root layout, halaman auth (client) |
+| `@packages/auth/next/server` | `getSessionUser`, `requireAuth`, `requireAdmin`, `loginAction`, `registerAction`, `logoutAction`, `meAction` | `(protected)/layout`, `app/layout` |
+| `@packages/auth/next/cookie` | `SESSION_COOKIE` (`tj_token`) — tanpa `next/headers`                                                         | `proxy.ts` (edge)                  |
+
+### Server actions, bukan route handler
+
+Auth dijalankan lewat **Server Actions** (`'use server'`) yang ada di package ini — aplikasi Next **tidak mendefinisikan API apa pun**:
+
+| Action           | Peran                                                                   |
+| ---------------- | ----------------------------------------------------------------------- |
+| `loginAction`    | `authService.login` → set cookie httpOnly → `{ ok: true, user }`        |
+| `registerAction` | `authService.register` + auto-login → set cookie → `{ ok: true, user }` |
+| `logoutAction`   | revoke sesi (best-effort) + hapus cookie → `{ ok: true }`               |
+| `meAction`       | cookie → `authService.authenticate` → `{ ok: true, user \| null }`      |
+
+Hasil gagal adalah objek polos `{ ok: false, status, code, message }` (class error tidak bisa melewati batas RPC) — `AuthProvider` menaikkannya kembali ke `AuthActionError`, sehingga kontrak error UI (`authErrorMessage`) tidak berubah. Server action juga membawa proteksi Origin/CSRF bawaan Next.
+
+```tsx
+// app/layout.tsx (server) — bootstrap user sekali render, tanpa fetch duplikat
+<AuthProvider initialUser={await getSessionUser()}>{children}</AuthProvider>;
+
+// app/(protected)/layout.tsx
+export default async function Layout({ children }) {
+  const user = await requireAuth(); // 401/invalid → redirect('/auth/login')
+  return <AuthShell>{children}</AuthShell>;
+}
+
+// Halaman login (client) — tetap lewat useAuth(), tanpa fetch('/api/auth/...')
+const { login } = useAuth();
+await login({ email, password });
+```
+
+Desain: token hanya hidup di **cookie httpOnly** (tak pernah menyentuh JS) — `proxy.ts` melakukan cek keberadaan cookie (tanpa secret), verifikasi otoritatif ada di `requireAuth()`/`requireAdmin()` & `meAction` (langsung ke domain `authService`, tanpa HTTP ke `apps/api`; admin hanya role `ADMIN`). `/next/cookie` sengaja entry terpisah agar `proxy.ts` tidak menarik React/`next/headers` ke bundel edge.
+
 Error domain memakai `AuthError` dengan `code` dari `API_ERROR_CODES` (`@packages/validators`):
 
 | Code                  | Status | Kapan                                    |
@@ -74,36 +118,47 @@ Nilai env dibaca via `@packages/environment` (root `.env*`, SSOT).
 
 ```
 packages/auth/
-├── package.json          # @packages/auth; deps: @packages/db, @packages/environment, @packages/validators
-├── tsconfig.json         # extends @configs/typescript/node.json (+ types jest)
-├── tsconfig.build.json   # emit CJS → dist/ (spec di-exclude)
-├── eslint.config.mjs     # re-export @configs/eslint/node
+├── package.json          # exports: ".", "./next", "./next/server", "./next/cookie"
+├── tsconfig.json         # extends node.json; + jsx react-jsx, lib DOM, include .tsx
+├── tsconfig.build.json   # emit CJS + d.ts → dist/ (spec & src/next/** di-exclude)
+├── eslint.config.mjs     # re-export @configs/eslint/react
 └── src/
-    ├── index.ts          # export authService, AuthError, hash/verifyPassword, token helpers
-    ├── password.ts       # hashPassword / verifyPassword (scrypt, guard parameter)
-    ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256) + TTL
-    ├── errors.ts         # AuthError { code, status }
-    ├── auth.service.ts   # register / login / logout / authenticate (pakai prisma)
-    ├── seed.ts           # seed idempotent admin + user demo (dijalankan dari @packages/db)
-    ├── password.spec.ts  # roundtrip, salt unik, stored hash rusak
-    ├── token.spec.ts     # roundtrip, tamper, expired, alg pinning, secret salah
-    └── auth.service.spec.ts  # skenario DB via jest.mock('@packages/db')
+    ├── index.ts              # aggregator publik root: re-export dari domain/
+    ├── domain/               # mesin auth (Node + Prisma)
+    │   ├── auth.service.ts   # register / login / logout / authenticate
+    │   ├── password.ts       # hashPassword / verifyPassword (scrypt)
+    │   ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256)
+    │   ├── errors.ts         # AuthError { code, status }
+    │   ├── seed.ts           # seed idempotent admin + user demo (dipanggil @packages/db)
+    │   └── *.spec.ts         # unit test domain
+    └── next/                 # integrasi Next.js
+        ├── index.ts          # AuthProvider, useAuth, authErrorMessage, SESSION_COOKIE
+        ├── auth-provider.tsx # 'use client' — context + panggil server actions
+        ├── cookie.ts         # SESSION_COOKIE (entry edge-safe)
+        ├── errors.ts         # AuthActionError + authErrorMessage
+        └── server/           # guards, server actions, opsi kuki (+ spec)
+            ├── actions.ts    # 'use server' — login/register/logout/me (ke domain langsung)
+            ├── action-types.ts # tipe hasil JSON { ok, ... }
+            ├── guards.ts     # getSessionUser / requireAuth / requireAdmin
+            └── cookie-options.ts
 ```
 
 ## Perintah
 
-| Perintah                                 | Deskripsi                       |
-| ---------------------------------------- | ------------------------------- |
-| `pnpm --filter @packages/auth lint`      | ESLint (`@configs/eslint/node`) |
-| `pnpm --filter @packages/auth typecheck` | `tsc --noEmit`                  |
-| `pnpm --filter @packages/auth test`      | Unit test (Jest + ts-jest)      |
-| `pnpm --filter @packages/auth build`     | Compile ke `dist/` (CJS + d.ts) |
+| Perintah                                 | Deskripsi                        |
+| ---------------------------------------- | -------------------------------- |
+| `pnpm --filter @packages/auth lint`      | ESLint (`@configs/eslint/react`) |
+| `pnpm --filter @packages/auth typecheck` | `tsc --noEmit`                   |
+| `pnpm --filter @packages/auth test`      | Unit test (Jest + ts-jest)       |
+| `pnpm --filter @packages/auth build`     | Compile ke `dist/` (CJS + d.ts)  |
 
 ## Catatan
 
-- **Node-only** (pakai `node:crypto`), resolusi `NodeNext`, emit CJS — sama seperti `@packages/db`/`@packages/logger`.
+- **Domain `.` = Node-only** (`node:crypto`, `NodeNext`, emit CJS ke `dist/`). **`/next` = source export** (`src/next/**`) yang di-compile Next/Turbopack di app konsumen — karena `require('next/headers'|'next/navigation'|'next/server')` dari **dist CJS kehilangan binding-nya** saat dibundel Turbopack (memicu `ReferenceError: server_1 is not defined`), sedangkan jalur source ESM aman. Build `dist/` sengaja mengecualikan `src/next/**` (termasuk server actions).
+- Karena `guards.ts`/`actions.ts` menarik domain (→ `@packages/environment`), kedua app Next kini membaca root `.env` (DB/JWT) langsung; `fs.existsSync` dinamis di loader env diberi `/*turbopackIgnore: true*/` agar Turbopack tidak men-trace seluruh project ke NFT.
+- `next`/`react` dideklarasikan sebagai **peerDependencies _optional_** — `apps/api` (Nest) yang hanya memakai root tidak ikut menarik react/next, sementara web/admin sudah memilikinya sendiri.
 - Konsumen menambahkan `"@packages/auth": "workspace:*"`; `dist/` di-ignore — jalankan `pnpm build` (Turbo mengurutkan `^build` dulu).
-- Unit test **mem-mock `@packages/db`** (`jest.mock`) supaya tidak butuh koneksi DB & aman di CI (tanpa `.env`).
+- Unit test domain **mem-mock `@packages/db`** (`jest.mock`) supaya tidak butuh koneksi DB & aman di CI (tanpa `.env`); unit test `next/server` mem-mock `next/headers`.
 - Batas panjang password (8..128) didefinisikan di `@packages/validators` (schema + DTO) — `password.ts` hanya mengekspor konstanta pendampingnya.
-- **Seed data** ada di `src/seed.ts` (akun admin + user demo, idempotent) dan dijalankan lewat `pnpm --filter @packages/db db:seed` (`prisma db seed` → `node ../auth/dist/seed.js`). Ada di package ini — bukan `@packages/db` — karena `db → auth` akan membuat siklus task Turbo.
-- Menambah field sesi baru: ubah `schema.prisma` (`Session`) → `pnpm --filter @packages/db migrate` → sesuaikan `auth.service.ts`.
+- **Seed data** ada di `src/domain/seed.ts` (akun admin + user demo, idempotent) dan dijalankan lewat `pnpm --filter @packages/db db:seed` (`prisma db seed` → `node ../auth/dist/domain/seed.js`). Ada di package ini — bukan `@packages/db` — karena `db → auth` akan membuat siklus task Turbo.
+- Menambah field sesi baru: ubah `schema.prisma` (`Session`) → `pnpm --filter @packages/db migrate` → sesuaikan `domain/auth.service.ts`.

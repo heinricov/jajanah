@@ -8,6 +8,7 @@ import { Field, FieldLabel } from '@packages/ui/components/field';
 import { Input } from '@packages/ui/components/input';
 import { Check, X } from 'lucide-react';
 import { AuthCard } from './auth-card';
+import { FormBanner } from './form-banner';
 
 function Rule({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -25,6 +26,10 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
 export type FormNewPasswordProps = {
   onSubmit?: (values: { password: string }) => void | Promise<void>;
   isPending?: boolean;
+  /** Pesan informasi netral (mis. "fitur belum tersedia"). */
+  notice?: React.ReactNode;
+  /** Nonaktifkan aksi simpan (backend reset belum ada). */
+  disabled?: boolean;
   continueHref?: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -35,6 +40,8 @@ export type FormNewPasswordProps = {
 export function FormNewPassword({
   onSubmit,
   isPending = false,
+  notice,
+  disabled = false,
   continueHref = '/auth/login',
   title = 'Set a new password',
   description = "Choose a strong password you don't use anywhere else.",
@@ -53,13 +60,16 @@ export function FormNewPassword({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!valid) return;
-    await onSubmit?.({ password });
-    setDone(true);
+    if (disabled || !valid) return;
+    if (onSubmit) {
+      await onSubmit({ password });
+      setDone(true);
+    }
   }
 
   return (
     <AuthCard title={done ? doneTitle : title} description={done ? doneDescription : description}>
+      <FormBanner notice={notice} />
       {done ? (
         <Button className="w-full" asChild>
           <a href={continueHref}>Continue to sign in</a>
@@ -98,7 +108,7 @@ export function FormNewPassword({
           <Button
             type="submit"
             className={cn('w-full', !valid && 'opacity-60')}
-            disabled={!valid || isPending}
+            disabled={disabled || !valid || isPending}
           >
             {isPending ? 'Updating…' : 'Update password'}
           </Button>

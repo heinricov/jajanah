@@ -36,8 +36,11 @@ function loadEnvironment({
   const values = {};
 
   for (const file of envFiles(mode, root)) {
-    if (fs.existsSync(file)) {
-      Object.assign(values, parse(fs.readFileSync(file)));
+    // turbopackIgnore: path .env dinamis (monorepo root) — tanpa ini Turbopack
+    // men-trace seluruh project ke NFT tiap halaman. Repo ini tanpa
+    // `output: 'standalone'`, jadi NFT tidak dipakai saat runtime.
+    if (fs.existsSync(/*turbopackIgnore: true*/ file)) {
+      Object.assign(values, parse(fs.readFileSync(/*turbopackIgnore: true*/ file)));
     }
   }
 

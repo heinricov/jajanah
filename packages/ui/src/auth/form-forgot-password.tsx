@@ -7,12 +7,17 @@ import { Field, FieldError, FieldLabel } from '@packages/ui/components/field';
 import { Input } from '@packages/ui/components/input';
 import { ArrowLeft, Send } from 'lucide-react';
 import { AuthCard } from './auth-card';
+import { FormBanner } from './form-banner';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type FormForgotPasswordProps = {
   onSubmit?: (email: string) => void | Promise<void>;
   isPending?: boolean;
+  /** Pesan informasi netral (mis. "fitur belum tersedia"). */
+  notice?: React.ReactNode;
+  /** Nonaktifkan aksi kirim (backend belum ada) — tombol jadi disabled. */
+  disabled?: boolean;
   backHref?: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -22,6 +27,8 @@ export type FormForgotPasswordProps = {
 export function FormForgotPassword({
   onSubmit,
   isPending = false,
+  notice,
+  disabled = false,
   backHref = '/auth/login',
   title = 'Forgot your password?',
   description = "Enter your email and we'll send you a reset link.",
@@ -33,13 +40,16 @@ export function FormForgotPassword({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (disabled) return;
     if (!emailPattern.test(email)) {
       setError('Enter a valid email address');
       return;
     }
     setError('');
-    await onSubmit?.(email);
-    setSent(true);
+    if (onSubmit) {
+      await onSubmit(email);
+      setSent(true);
+    }
   }
 
   return (
@@ -78,6 +88,7 @@ export function FormForgotPassword({
         )
       }
     >
+      <FormBanner notice={notice} />
       {sent ? (
         <Button variant="outline" className="w-full" onClick={() => setSent(false)}>
           Use a different email
@@ -100,7 +111,7 @@ export function FormForgotPassword({
             />
             <FieldError>{error}</FieldError>
           </Field>
-          <Button type="submit" className="mt-4 w-full" disabled={isPending}>
+          <Button type="submit" className="mt-4 w-full" disabled={disabled || isPending}>
             {isPending ? 'Sending…' : 'Send reset link'}
           </Button>
         </form>

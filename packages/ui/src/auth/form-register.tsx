@@ -8,6 +8,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@packages/ui/componen
 import { Input } from '@packages/ui/components/input';
 import { Separator } from '@packages/ui/components/separator';
 import { AuthCard } from './auth-card';
+import { FormBanner } from './form-banner';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -24,10 +25,15 @@ export type FormRegisterProps = {
   onSubmit?: (values: RegisterValues) => void | Promise<void>;
   onSocialSubmit?: (provider: SocialProvider) => void;
   isPending?: boolean;
+  /** Pesan gagal dari API (dinormalisasi oleh `authErrorMessage`). */
+  error?: React.ReactNode;
+  /** Sembunyikan tombol Google/GitHub bila backend OAuth belum tersedia. */
+  showSocial?: boolean;
   loginHref?: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
   logo?: React.ReactNode;
+  /** `undefined` = footer default (link Sign in); `null` = sembunyikan footer. */
   footer?: React.ReactNode;
 };
 
@@ -35,6 +41,8 @@ export function FormRegister({
   onSubmit,
   onSocialSubmit,
   isPending = false,
+  error,
+  showSocial = true,
   loginHref = '/auth/login',
   title = 'Create your account',
   description = 'Start building with Acme. No credit card required.',
@@ -76,16 +84,19 @@ export function FormRegister({
       description={description}
       logo={logo}
       footer={
-        footer ?? (
+        footer === undefined ? (
           <>
             Already have an account?
             <Button variant="link" className="px-1" asChild>
               <a href={loginHref}>Sign in</a>
             </Button>
           </>
+        ) : (
+          footer
         )
       }
     >
+      <FormBanner error={error} />
       <form onSubmit={handleSubmit} noValidate>
         <FieldGroup>
           <Field>
@@ -141,32 +152,36 @@ export function FormRegister({
         </FieldGroup>
       </form>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <Separator className="flex-1" />
-        Or sign up with
-        <Separator className="flex-1" />
-      </div>
+      {showSocial ? (
+        <>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <Separator className="flex-1" />
+            Or sign up with
+            <Separator className="flex-1" />
+          </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1"
-          onClick={() => onSocialSubmit?.('google')}
-        >
-          <GoogleMark data-icon="inline-start" />
-          Google
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1"
-          onClick={() => onSocialSubmit?.('github')}
-        >
-          <GithubMark data-icon="inline-start" />
-          GitHub
-        </Button>
-      </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => onSocialSubmit?.('google')}
+            >
+              <GoogleMark data-icon="inline-start" />
+              Google
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => onSocialSubmit?.('github')}
+            >
+              <GithubMark data-icon="inline-start" />
+              GitHub
+            </Button>
+          </div>
+        </>
+      ) : null}
     </AuthCard>
   );
 }

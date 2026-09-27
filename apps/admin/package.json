@@ -9,6 +9,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@packages/auth": "workspace:*",
     "@packages/client": "workspace:*",
     "@packages/ui": "workspace:*",
     "@packages/validators": "workspace:*",

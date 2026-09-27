@@ -13,6 +13,9 @@ packages/ui/
 ├── postcss.config.mjs     # @tailwindcss/postcss — di-reexport app (SSOT)
 └── src/
     ├── components/        # Komponen shadcn (button, card, input, badge, …)
+    ├── auth/              # Form & shell auth (form-login, form-register, auth-card, user-auth)
+    ├── dashboard/         # Layout dashboard (app-layout, app-sidebar, nav-*, team-switcher)
+    ├── apps/              # Logo aplikasi (app-logo)
     ├── lib/utils.ts       # export { cn } from "cn"
     ├── hooks/             # Hook bersama (opsional)
     └── styles/globals.css # 1-satunya sumber theme/Tailwind — di-import app

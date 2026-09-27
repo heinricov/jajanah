@@ -55,7 +55,9 @@ apps/api/
 
 Endpoint bertanda **Bearer** memakai `AuthGuard` (`Authorization: Bearer <JWT>`): gagal verifikasi → `AuthError` → exception filter → envelope error terkontrak. Logika auth (hash, JWT, sesi) hidup di [`@packages/auth`](../../packages/auth/README.md) — app ini hanya HTTP-nya.
 
-> CORS aktif (`app.enableCors()` di `main.ts`) supaya browser web/admin (`:3000`/`:3001`) boleh memanggil API via `@packages/client`. Untuk produksi, pertimbangkan membatasi origin lewat env.
+> Endpoint auth di atas ditujukan untuk **konsumen HTTP eksternal**. `apps/web` & `apps/admin` **tidak memakainya** — login/logout/me di sana lewat server actions `@packages/auth/next/server` (domain langsung, cookie httpOnly di-set oleh Next, tanpa HTTP ke app ini).
+
+> CORS aktif (`app.enableCors()` di `main.ts`) supaya pemanggil lintas-origin (browser via `@packages/client`, mis. demo health di `apps/web`) boleh mengakses API. Untuk produksi, pertimbangkan membatasi origin lewat env.
 
 > Setiap respons membawa header `x-request-id` (requestId masuk dihormati, atau dibuat baru) — dipakai untuk mengorelasikan akses log dengan client.
 

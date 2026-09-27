@@ -7,8 +7,8 @@ export default defineConfig({
   migrations: {
     path: 'prisma/migrations',
     // Seed berada di @packages/auth (domain pemilik data Auth) — path relatif
-    // dari cwd package ini. Sumber: packages/auth/src/seed.ts.
-    seed: 'node ../auth/dist/seed.js',
+    // dari cwd package ini. Sumber: packages/auth/src/domain/seed.ts.
+    seed: 'node ../auth/dist/domain/seed.js',
   },
   datasource: {
     url: process.env.DATABASE_URL ?? '',

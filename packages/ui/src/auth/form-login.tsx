@@ -9,6 +9,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@packages/ui/componen
 import { Input } from '@packages/ui/components/input';
 import { AppLogo } from '../apps/app-logo';
 import { AuthCard } from './auth-card';
+import { FormBanner } from './form-banner';
 
 const signInSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -20,17 +21,21 @@ type SignInValues = z.infer<typeof signInSchema>;
 export type FormLoginProps = {
   onSubmit?: (values: SignInValues) => void | Promise<void>;
   isPending?: boolean;
+  /** Pesan gagal dari API (dinormalisasi oleh `authErrorMessage`). */
+  error?: React.ReactNode;
   forgotPasswordHref?: string;
   registerHref?: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
   logo?: React.ReactNode;
+  /** `undefined` = footer default (link Sign Up); `null` = sembunyikan footer. */
   footer?: React.ReactNode;
 };
 
 export function FormLogin({
   onSubmit,
   isPending = false,
+  error,
   forgotPasswordHref = '/auth/forgot-password',
   registerHref = '/auth/register',
   title = 'Sign In To Acme',
@@ -74,16 +79,19 @@ export function FormLogin({
       description={description}
       logo={logo}
       footer={
-        footer ?? (
+        footer === undefined ? (
           <>
             Don&apos;t have an account?
             <Button variant="link" className="px-1" asChild>
               <a href={registerHref}>Sign Up</a>
             </Button>
           </>
+        ) : (
+          footer
         )
       }
     >
+      <FormBanner error={error} />
       <form onSubmit={handleSubmit} noValidate>
         <FieldGroup>
           <Field>

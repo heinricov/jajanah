@@ -3,8 +3,10 @@
   "extends": "@configs/typescript/node.json",
   "compilerOptions": {
     "types": ["node", "jest"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "verbatimModuleSyntax": false,
     "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

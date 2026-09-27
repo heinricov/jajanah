@@ -29,8 +29,12 @@ export default function HomePage() {
         <CardContent className="flex flex-col gap-3">
           <Input placeholder="Cari sesuatu…" />
           <div className="flex gap-2">
-            <Button>Mulai</Button>
-            <Button variant="outline">Pelajari lebih lanjut</Button>
+            <Button asChild>
+              <a href="/auth/login">Mulai</a>
+            </Button>
+            <Button variant="outline" asChild>
+              <a href="/auth/login">Pelajari lebih lanjut</a>
+            </Button>
           </div>
         </CardContent>
       </Card>

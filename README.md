@@ -15,7 +15,7 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 │   ├── environment/       # @packages/environment — loader .env (SSOT env)
 │   ├── db/                # @packages/db — Prisma ORM 7 (PostgreSQL)
 │   ├── validators/        # @packages/validators — SSOT types + kontrak request/response API
-│   ├── auth/              # @packages/auth — SSOT domain auth (scrypt, JWT sesi, register/login/logout)
+│   ├── auth/              # @packages/auth — SSOT domain auth (scrypt, JWT sesi, register/login/logout) + server actions Next
 │   ├── client/            # @packages/client — typed API client (satu-satunya jalur web → api)
 │   └── logger/            # @packages/logger — structured logger + request context (AsyncLocalStorage)
 ├── scripts/              # Script operasional (masih kosong)
@@ -146,7 +146,7 @@ Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menamb
 import { prisma } from '@packages/db';
 ```
 
-Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate|db:seed`. **Seed** (`db:seed`, sumber di `packages/auth/src/seed.ts`) mengisi akun awal idempoten — `admin@jajanah.local`/`admin123` (ADMIN) + `user@jajanah.local`/`user1234` (USER) — memakai `hashPassword` dari `@packages/auth`, jadi langsung bisa login. Detail lengkap (struktur, cara menambah model, seed): lihat [`packages/db/README.md`](packages/db/README.md).
+Perintah: `pnpm --filter @packages/db migrate|db:push|studio|generate|db:seed`. **Seed** (`db:seed`, sumber di `packages/auth/src/domain/seed.ts`) mengisi akun awal idempoten — `admin@jajanah.local`/`admin123` (ADMIN) + `user@jajanah.local`/`user1234` (USER) — memakai `hashPassword` dari `@packages/auth`, jadi langsung bisa login. Detail lengkap (struktur, cara menambah model, seed): lihat [`packages/db/README.md`](packages/db/README.md).
 
 ## API Contracts (`@packages/validators`)
 
@@ -222,7 +222,8 @@ await authService.logout(token); // hapus row Session by jti → token ter-revok
 - **Password**: `crypto.scrypt` + `timingSafeEqual` (zero dependency), tersimpan `scrypt$N$r$p$salt$hash`; login email tak dikenal tetap menjalankan scrypt (hash dummy) — timing setara, anti oracle.
 - **Token**: JWT HS256 (`node:crypto`, tanpa library eksternal) berisi `sub`/`jti`/`role`/`exp`; `jti` disimpan di kolom `Session.token` sehingga logout **bisa menarik token yang sudah terbit** (hybrid JWT + sesi DB, bukan JWT murni yang tak bisa di-revoke).
 - **Error domain** `AuthError` (`EMAIL_TAKEN` 409, `INVALID_CREDENTIALS` 401, `UNAUTHORIZED` 401) diterjemahkan `AllExceptionsFilter` `apps/api` ke envelope `{ error }` SSOT → sampai ke `ApiHttpError.code` di `@packages/client`.
-- **HTTP** tetap di `apps/api` (`AuthController` + `AuthGuard` + decorator `@CurrentUser`/`@AuthToken`); guard juga menyetel `userId` di context ALS logger supaya log sesudah login otomatis membawa `userId`.
+- **HTTP** tetap di `apps/api` (`AuthController` + `AuthGuard` + decorator `@CurrentUser`/`@AuthToken`) untuk konsumen eksternal; guard juga menyetel `userId` di context ALS logger supaya log sesudah login otomatis membawa `userId`.
+- **Integrasi Next** (`apps/web` & `apps/admin`) **tidak lewat HTTP & tidak punya endpoint sendiri** — `loginAction`/`registerAction`/`logoutAction`/`meAction` (server actions `'use server'` di `@packages/auth/next/server`) memanggil `authService` langsung, mengatur cookie httpOnly di server, dan di-backup guard `requireAuth()`/`requireAdmin()` pada layout server. Proteksi Origin/CSRF datang dari mekanisme server action Next.
 
 Detail (desain, env `JWT_SECRET`/`AUTH_SESSION_TTL_HOURS`, cara pakai): lihat [`packages/auth/README.md`](packages/auth/README.md).
 
@@ -260,7 +261,7 @@ Detail (desain, env `JWT_SECRET`/`AUTH_SESSION_TTL_HOURS`, cara pakai): lihat [`
 - Konfigurasi hidup **hanya** di `configs/` — workspace lain hanya extend/import.
 - Nilai environment hidup **hanya** di file `.env*` root — jangan membuat `.env` lokal di app/package.
 - Kontrak request/response API (interface + Zod schema + class-validator DTO) hidup **hanya** di `packages/validators` — apps import dari sana, jangan deklarasikan ulang.
-- Komunikasi web → API **hanya** lewat `@packages/client` — jangan memanggil `fetch()` ke `apps/api` secara langsung.
+- Komunikasi web → API **hanya** lewat `@packages/client` — jangan memanggil `fetch()` ke `apps/api` secara langsung. **Pengecualian auth**: login/register/logout/me di web/admin lewat server actions `@packages/auth` (domain langsung, tanpa HTTP).
 - Dependency dipasang di workspace yang **langsung** menggunakannya; versi yang dipakai bersama harus konsisten.
 - Referensi antar workspace selalu pakai protokol `workspace:*`.
 - `pnpm-lock.yaml` adalah satu-satunya sumber kebenaran resolusi dependency — jangan commit `node_modules/`.

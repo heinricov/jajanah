@@ -54,6 +54,8 @@ try {
 ```
 
 > Penyimpanan token (cookie/httpOnly, dsb.) **bukan** tanggung jawab package ini — client hanya menerima/mengirim token per-panggilan.
+>
+> **Catatan auth Next**: `apps/web` & `apps/admin` **tidak lagi memakai method auth di atas** — login/register/logout/me mereka lewat server actions `@packages/auth` (domain langsung, cookie httpOnly). Method ini tetap ada untuk konsumen HTTP eksternal / non-Next; buat UI app Next, gunakan `useAuth()` dari `@packages/auth/next`.
 
 ### Base URL
 

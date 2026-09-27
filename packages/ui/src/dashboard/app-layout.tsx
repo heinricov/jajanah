@@ -9,13 +9,26 @@ import {
 import { Separator } from '../components/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '../components/sidebar';
 import { TooltipProvider } from '../components/tooltip';
-import { AppSidebar } from './app-sidebar';
+import { AppSidebar, type AppSidebarProps } from './app-sidebar';
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
+export type DashboardUser = AppSidebarProps['user'];
+
+export type DashboardLayoutProps = {
+  children: React.ReactNode;
+  /** User sesi nyata; tanpa prop ini dashboard jadi mode demo (data contoh). */
+  user?: DashboardUser;
+  /** Handler logout — memunculkan menu Logout fungsional di sidebar. */
+  onLogout?: () => void;
+};
+
+export function DashboardLayout({ children, user, onLogout }: DashboardLayoutProps) {
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <AppSidebar />
+        <AppSidebar
+          {...(user !== undefined ? { user } : {})}
+          {...(onLogout !== undefined ? { onLogout } : {})}
+        />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
             <div className="flex items-center gap-2 px-4">

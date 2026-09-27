@@ -24,6 +24,9 @@ export default function AdminDashboardPage() {
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-semibold">Panel Admin</h1>
         <Badge>admin</Badge>
+        <Button variant="outline" size="sm" asChild>
+          <a href="/auth/login">Masuk</a>
+        </Button>
       </div>
 
       <Card>

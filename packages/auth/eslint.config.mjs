@@ -1,5 +1,5 @@
-import node from '@configs/eslint/node';
+import react from '@configs/eslint/react';
 
-const config = [...node];
+const config = [...react];
 
 export default config;

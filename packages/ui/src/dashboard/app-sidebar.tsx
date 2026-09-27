@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { NavMain } from '../dashboard/nav-main';
 import { NavProjects } from '../dashboard/nav-projects';
-import { NavUser } from '../dashboard/nav-user';
+import { NavUser, type NavUserUser } from '../dashboard/nav-user';
 import { TeamSwitcher } from '../dashboard/team-switcher';
 import {
   Sidebar,
@@ -156,7 +156,14 @@ const data = {
   ],
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  /** User sesi nyata; bila tidak diisi, memakai data contoh (demo). */
+  user?: NavUserUser;
+  /** Handler logout sesungguhnya; bila diisi, menu hanya berisi Logout. */
+  onLogout?: () => void;
+};
+
+export function AppSidebar({ user, onLogout, ...props }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -167,7 +174,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user ?? data.user} {...(onLogout !== undefined ? { onLogout } : {})} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

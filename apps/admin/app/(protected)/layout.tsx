@@ -1,10 +1,8 @@
-import React from 'react';
-import { DashboardLayout } from '@packages/ui/dashboard/app-layout';
+import { requireAdmin } from '@packages/auth/next/server';
 
-export default function layout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <DashboardLayout>{children}</DashboardLayout>
-    </>
-  );
+import { AuthDashboardLayout } from '@/components/auth-dashboard-layout';
+
+export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  await requireAdmin();
+  return <AuthDashboardLayout>{children}</AuthDashboardLayout>;
 }
