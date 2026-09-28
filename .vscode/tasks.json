@@ -1,0 +1,84 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: web",
+      "type": "shell",
+      "command": "pnpm dev:web",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen",
+        "instanceLimit": 1
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always",
+        "focus": false,
+        "echo": true,
+        "showReuseMessage": false,
+        "clear": false,
+        "close": false
+      }
+    },
+    {
+      "label": "dev: admin",
+      "type": "shell",
+      "command": "pnpm dev:admin",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen",
+        "instanceLimit": 1
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "silent",
+        "focus": false,
+        "echo": true,
+        "showReuseMessage": false,
+        "clear": false,
+        "close": false
+      }
+    },
+    {
+      "label": "dev: api",
+      "type": "shell",
+      "command": "pnpm dev:api",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen",
+        "instanceLimit": 1
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "silent",
+        "focus": false,
+        "echo": true,
+        "showReuseMessage": false,
+        "clear": false,
+        "close": false
+      }
+    },
+    {
+      "label": "dev: all apps (3 tab)",
+      "dependsOrder": "parallel",
+      "dependsOn": ["dev: web", "dev: admin", "dev: api"],
+      "problemMatcher": [],
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

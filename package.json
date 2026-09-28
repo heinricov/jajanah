@@ -7,7 +7,10 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "turbo run dev --filter=web",
+    "dev:admin": "turbo run dev --filter=admin",
+    "dev:api": "turbo run dev --filter=api",
     "lint": "turbo run lint lint:root",
     "lint:root": "eslint .",
     "typecheck": "turbo run typecheck",

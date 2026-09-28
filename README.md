@@ -237,6 +237,11 @@ Detail (desain, env `JWT_SECRET`/`AUTH_SESSION_TTL_HOURS`, cara pakai): lihat [`
 
 `apps/web` & `apps/admin` adalah Next.js 16 (App Router + Turbopack), memakai preset dari `configs/` (`tsconfig` → `@configs/typescript/react.json`, ESLint → `@configs/eslint/next`, config → `@configs/next`) dan komponen dari `@packages/ui`. `pnpm dev` menjalankan semuanya paralel (web :3000, admin :3001, api :3002) — port bawaan berasal dari `WEB_PORT` / `ADMIN_PORT` / `API_PORT` di root `.env` dan bisa diubah di sana.
 
+**Log per app (tab terpisah)** — `pnpm dev` mencampur log ketiga app dalam satu stream turbo (di VS Code/Cursor ia menampilkan petunjuk singkat dulu, lihat `scripts/dev.mjs`). Untuk tab terpisah yang bisa diklik pindah:
+
+- **VS Code / Cursor — otomatis**: task `dev: all apps (3 tab)` di [`.vscode/tasks.json`](.vscode/tasks.json) dijalankan saat folder dibuka (`runOn: folderOpen`) → tiga tab terminal langsung terbuka, satu per app (izinkan sekali saat VS Code menanyakan _"Allow automatic tasks in folder?"_). Jalankan manual dengan `Cmd+Shift+B` atau Terminal → Run Task….
+- `pnpm dev:web` / `pnpm dev:admin` / `pnpm dev:api` — satu app saja; jalankan di tab terminal terpisah (berlaku di terminal apa pun).
+
 `apps/api` adalah NestJS 11 (CommonJS via `NodeNext`, builder `tsc`): `tsconfig` → `@configs/typescript/nest.json`, ESLint → `@configs/eslint/nest`, dan env dari `@packages/environment` (di-import di `main.ts`). Unit test memakai Jest (`pnpm test`).
 
 ## Menambah workspace baru
