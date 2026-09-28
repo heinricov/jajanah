@@ -7,9 +7,9 @@ import { Button } from '@packages/ui/components/button';
 import { Checkbox } from '@packages/ui/components/checkbox';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@packages/ui/components/field';
 import { Input } from '@packages/ui/components/input';
-import { AppLogo } from '../apps/app-logo';
 import { AuthCard } from './auth-card';
 import { FormBanner } from './form-banner';
+import { PasswordInput } from './password-input';
 
 const signInSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -27,6 +27,7 @@ export type FormLoginProps = {
   registerHref?: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
+  /** Logo di atas judul — default `AppLogo` (dari `AuthCard`). */
   logo?: React.ReactNode;
   /** `undefined` = footer default (link Sign Up); `null` = sembunyikan footer. */
   footer?: React.ReactNode;
@@ -40,7 +41,7 @@ export function FormLogin({
   registerHref = '/auth/register',
   title = 'Sign In To Acme',
   description = 'Welcome back. Enter your details to continue.',
-  logo = <AppLogo />,
+  logo,
   footer,
 }: FormLoginProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -108,10 +109,9 @@ export function FormLogin({
           </Field>
           <Field>
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               placeholder="••••••••"
               aria-invalid={!!errors.password}
               onChange={() => clearError('password')}
@@ -127,7 +127,7 @@ export function FormLogin({
               <a href={forgotPasswordHref}>Forgot Password?</a>
             </Button>
           </Field>
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <Button type="submit" size="lg" className="w-full" disabled={isPending}>
             {isPending ? 'Signing in…' : 'Sign In'}
           </Button>
         </FieldGroup>

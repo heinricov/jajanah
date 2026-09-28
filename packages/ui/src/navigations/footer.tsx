@@ -1,6 +1,5 @@
-import { Wallet } from 'lucide-react';
-
 import { cn } from '@packages/ui/lib/utils';
+import { AppLogo } from '../apps/app-logo';
 
 export type FooterItem = {
   href: string;
@@ -24,13 +23,7 @@ export function Footer({ items = DEFAULT_ITEMS, copyright, className }: FooterPr
   return (
     <footer className={cn('border-t border-border bg-background', className)}>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Wallet className="size-3.5" />
-          </span>
-          <span className="font-semibold">jajanah</span>
-          <span className="text-muted-foreground">— catat jajanmu</span>
-        </div>
+        <AppLogo href="/" orientation="horizontal" />
 
         <nav className="flex items-center gap-4">
           {items.map((item) => (

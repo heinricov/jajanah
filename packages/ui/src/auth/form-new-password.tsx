@@ -4,11 +4,11 @@ import { useState } from 'react';
 
 import { cn } from '@packages/ui/lib/utils';
 import { Button } from '@packages/ui/components/button';
-import { Field, FieldLabel } from '@packages/ui/components/field';
-import { Input } from '@packages/ui/components/input';
-import { Check, X } from 'lucide-react';
+import { Field, FieldGroup, FieldLabel } from '@packages/ui/components/field';
+import { ArrowLeft, Check, X } from 'lucide-react';
 import { AuthCard } from './auth-card';
 import { FormBanner } from './form-banner';
+import { PasswordInput } from './password-input';
 
 function Rule({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -35,6 +35,10 @@ export type FormNewPasswordProps = {
   description?: React.ReactNode;
   doneTitle?: React.ReactNode;
   doneDescription?: React.ReactNode;
+  /** Logo di atas judul — default `AppLogo` (dari `AuthCard`). */
+  logo?: React.ReactNode;
+  /** `undefined` = footer default (link Back to sign in, disembunyikan saat `done`); `null` = sembunyikan footer. */
+  footer?: React.ReactNode;
 };
 
 export function FormNewPassword({
@@ -47,6 +51,8 @@ export function FormNewPassword({
   description = "Choose a strong password you don't use anywhere else.",
   doneTitle = 'Password updated',
   doneDescription = 'Your password has been changed. You can sign in with it now.',
+  logo,
+  footer,
 }: FormNewPasswordProps) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -68,50 +74,69 @@ export function FormNewPassword({
   }
 
   return (
-    <AuthCard title={done ? doneTitle : title} description={done ? doneDescription : description}>
+    <AuthCard
+      title={done ? doneTitle : title}
+      description={done ? doneDescription : description}
+      logo={logo}
+      footer={
+        footer === undefined ? (
+          done ? null : (
+            <Button variant="link" className="px-1" asChild>
+              <a href={continueHref}>
+                <ArrowLeft data-icon="inline-start" aria-hidden="true" />
+                Back to sign in
+              </a>
+            </Button>
+          )
+        ) : (
+          footer
+        )
+      }
+    >
       <FormBanner notice={notice} />
       {done ? (
-        <Button className="w-full" asChild>
+        <Button size="lg" className="w-full" asChild>
           <a href={continueHref}>Continue to sign in</a>
         </Button>
       ) : (
-        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-          <Field>
-            <FieldLabel htmlFor="password">New password</FieldLabel>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
-            <Input
-              id="confirm"
-              name="confirm"
-              type="password"
-              placeholder="••••••••"
-              value={confirm}
-              aria-invalid={confirm.length > 0 && !matches}
-              onChange={(event) => setConfirm(event.target.value)}
-            />
-          </Field>
-          <ul className="flex flex-col gap-1.5">
-            <Rule ok={hasLength} label="At least 8 characters" />
-            <Rule ok={hasUpper} label="One uppercase letter" />
-            <Rule ok={hasNumber} label="One number" />
-            <Rule ok={matches} label="Passwords match" />
-          </ul>
-          <Button
-            type="submit"
-            className={cn('w-full', !valid && 'opacity-60')}
-            disabled={disabled || !valid || isPending}
-          >
-            {isPending ? 'Updating…' : 'Update password'}
-          </Button>
+        <form onSubmit={handleSubmit} noValidate>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="password">New password</FieldLabel>
+              <PasswordInput
+                id="password"
+                name="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="confirm">Confirm password</FieldLabel>
+              <PasswordInput
+                id="confirm"
+                name="confirm"
+                placeholder="••••••••"
+                value={confirm}
+                aria-invalid={confirm.length > 0 && !matches}
+                onChange={(event) => setConfirm(event.target.value)}
+              />
+            </Field>
+            <ul className="flex flex-col gap-1.5">
+              <Rule ok={hasLength} label="At least 8 characters" />
+              <Rule ok={hasUpper} label="One uppercase letter" />
+              <Rule ok={hasNumber} label="One number" />
+              <Rule ok={matches} label="Passwords match" />
+            </ul>
+            <Button
+              type="submit"
+              size="lg"
+              className={cn('w-full', !valid && 'opacity-60')}
+              disabled={disabled || !valid || isPending}
+            >
+              {isPending ? 'Updating…' : 'Update password'}
+            </Button>
+          </FieldGroup>
         </form>
       )}
     </AuthCard>

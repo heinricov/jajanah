@@ -9,6 +9,7 @@ import { Input } from '@packages/ui/components/input';
 import { Separator } from '@packages/ui/components/separator';
 import { AuthCard } from './auth-card';
 import { FormBanner } from './form-banner';
+import { PasswordInput } from './password-input';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -32,6 +33,7 @@ export type FormRegisterProps = {
   loginHref?: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
+  /** Logo di atas judul — default `AppLogo` (dari `AuthCard`). */
   logo?: React.ReactNode;
   /** `undefined` = footer default (link Sign in); `null` = sembunyikan footer. */
   footer?: React.ReactNode;
@@ -46,7 +48,7 @@ export function FormRegister({
   loginHref = '/auth/login',
   title = 'Create your account',
   description = 'Start building with Acme. No credit card required.',
-  logo = <RegisterMark />,
+  logo,
   footer,
 }: FormRegisterProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -124,11 +126,10 @@ export function FormRegister({
           </Field>
           <Field>
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
-              placeholder="At least 8 characters"
+              placeholder="••••••••"
               aria-invalid={!!errors.password}
               onChange={() => clearError('password')}
             />
@@ -146,7 +147,7 @@ export function FormRegister({
             </FieldLabel>
             <FieldError>{errors.terms}</FieldError>
           </Field>
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <Button type="submit" size="lg" className="w-full" disabled={isPending}>
             {isPending ? 'Creating your account…' : 'Create account'}
           </Button>
         </FieldGroup>
@@ -164,6 +165,7 @@ export function FormRegister({
             <Button
               type="button"
               variant="outline"
+              size="lg"
               className="flex-1"
               onClick={() => onSocialSubmit?.('google')}
             >
@@ -173,6 +175,7 @@ export function FormRegister({
             <Button
               type="button"
               variant="outline"
+              size="lg"
               className="flex-1"
               onClick={() => onSocialSubmit?.('github')}
             >
@@ -183,22 +186,6 @@ export function FormRegister({
         </>
       ) : null}
     </AuthCard>
-  );
-}
-
-function RegisterMark() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-      className="mx-auto size-7 shrink-0 text-primary"
-    >
-      <rect x="3" y="3" width="8" height="8" transform="rotate(-6 7 7)" />
-      <rect x="3" y="13" width="8" height="8" transform="rotate(5 7 17)" />
-      <rect x="13" y="13" width="8" height="8" transform="rotate(-4 17 17)" />
-      <rect x="13" y="3" width="8" height="8" transform="rotate(15 17 7)" />
-    </svg>
   );
 }
 

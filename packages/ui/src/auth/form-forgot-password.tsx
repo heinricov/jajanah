@@ -3,9 +3,9 @@
 import { useState } from 'react';
 
 import { Button } from '@packages/ui/components/button';
-import { Field, FieldError, FieldLabel } from '@packages/ui/components/field';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@packages/ui/components/field';
 import { Input } from '@packages/ui/components/input';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { AuthCard } from './auth-card';
 import { FormBanner } from './form-banner';
 
@@ -21,6 +21,9 @@ export type FormForgotPasswordProps = {
   backHref?: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
+  /** Logo di atas judul — default `AppLogo` (dari `AuthCard`). */
+  logo?: React.ReactNode;
+  /** `undefined` = footer default (link Back to sign in); `null` = sembunyikan footer. */
   footer?: React.ReactNode;
 };
 
@@ -32,6 +35,7 @@ export function FormForgotPassword({
   backHref = '/auth/login',
   title = 'Forgot your password?',
   description = "Enter your email and we'll send you a reset link.",
+  logo,
   footer,
 }: FormForgotPasswordProps) {
   const [email, setEmail] = useState('');
@@ -65,55 +69,48 @@ export function FormForgotPassword({
           description
         )
       }
-      logo={
-        sent ? (
-          <span
-            className="mx-auto flex size-11 items-center justify-center rounded-lg border border-border bg-muted/40"
-            aria-hidden="true"
-          >
-            <Send className="size-5" />
-          </span>
-        ) : null
-      }
+      logo={logo}
       footer={
-        footer ?? (
-          <>
-            <Button variant="link" size="sm" className="text-muted-foreground" asChild>
-              <a href={backHref}>
-                <ArrowLeft data-icon="inline-start" aria-hidden="true" />
-                Back to sign in
-              </a>
-            </Button>
-          </>
+        footer === undefined ? (
+          <Button variant="link" className="px-1" asChild>
+            <a href={backHref}>
+              <ArrowLeft data-icon="inline-start" aria-hidden="true" />
+              Back to sign in
+            </a>
+          </Button>
+        ) : (
+          footer
         )
       }
     >
       <FormBanner notice={notice} />
       {sent ? (
-        <Button variant="outline" className="w-full" onClick={() => setSent(false)}>
+        <Button variant="outline" size="lg" className="w-full" onClick={() => setSent(false)}>
           Use a different email
         </Button>
       ) : (
         <form onSubmit={handleSubmit} noValidate>
-          <Field>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              aria-invalid={!!error}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                if (error) setError('');
-              }}
-            />
-            <FieldError>{error}</FieldError>
-          </Field>
-          <Button type="submit" className="mt-4 w-full" disabled={disabled || isPending}>
-            {isPending ? 'Sending…' : 'Send reset link'}
-          </Button>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="email">Email</FieldLabel>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                aria-invalid={!!error}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  if (error) setError('');
+                }}
+              />
+              <FieldError>{error}</FieldError>
+            </Field>
+            <Button type="submit" size="lg" className="w-full" disabled={disabled || isPending}>
+              {isPending ? 'Sending…' : 'Send reset link'}
+            </Button>
+          </FieldGroup>
         </form>
       )}
     </AuthCard>

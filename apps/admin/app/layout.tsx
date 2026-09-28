@@ -18,8 +18,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="id" className={cn('font-sans', oxanium.variable)}>
-      <body>
-        <AuthProvider initialUser={user}>{children}</AuthProvider>
+      <body className="flex min-h-dvh flex-col">
+        <AuthProvider initialUser={user}>
+          <div className="flex flex-1 flex-col">{children}</div>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -1,7 +1,6 @@
-import { Wallet } from 'lucide-react';
-
 import { Button } from '@packages/ui/components/button';
 import { cn } from '@packages/ui/lib/utils';
+import { AppLogo } from '../apps/app-logo';
 
 export type NavbarItem = {
   href: string;
@@ -43,12 +42,7 @@ export function Navbar({ user, items = DEFAULT_ITEMS, showAuth = true, className
     >
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4">
         <div className="flex items-center gap-4">
-          <a href="/" className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Wallet className="size-4" />
-            </span>
-            <span className="text-sm font-semibold">jajanah</span>
-          </a>
+          <AppLogo href="/" orientation="horizontal" />
 
           <nav className="flex items-center gap-1">
             {items.map((item) => (
