@@ -1,6 +1,6 @@
 # @packages/ui
 
-Package bersama berisi komponen [shadcn/ui](https://ui.shadcn.com) (basis **Radix**, preset **Nova**, base color **neutral**, ikon **lucide**), Tailwind CSS v4, dan helper `cn`.
+Package bersama berisi komponen [shadcn/ui](https://ui.shadcn.com) (basis **Radix**, preset **Mira** / `radix-mira`, base color **mist**, theme **sky**, font **Oxanium**, ikon **lucide**), Tailwind CSS v4, dan helper `cn`.
 
 ## Struktur
 
@@ -31,17 +31,29 @@ packages/ui/
 
 ## Menambah komponen shadcn
 
-Jalankan dari root (atau dari direktori mana pun dengan `-c`):
+Jalankan dari root dengan `-c` menunjuk **path app** (preflight CLI butuh proyek framework — `packages/ui` sendiri ditolak):
 
 ```bash
-pnpm dlx shadcn@latest add <nama-komponen> -c packages/ui
+pnpm dlx shadcn@latest add <nama-komponen> -c apps/web
 # contoh:
-pnpm dlx shadcn@latest add dialog dropdown-menu toast -c packages/ui
+pnpm dlx shadcn@latest add dialog dropdown-menu toast -c apps/web
 ```
 
-- File masuk ke `src/components/`, dependensi radix dkk. otomatis ditambahkan ke `package.json`
+- Routing monorepo: file tetap masuk ke `packages/ui/src/components/`, dependensi ditambahkan ke `package.json` yang tepat
 - Setelah `add`, jalankan `pnpm install` bila CLI tidak melakukannya, lalu `pnpm format`
-- **Jangan ubah `style`, `tailwind.baseColor`, dan `tailwind.cssVariables` di `components.json`** — tidak bisa diubah setelah inisialisasi dan menentukan hasil generate komponen
+- Setelah menambah komponen, sinkronkan `style` & `tailwind.baseColor` ke ketiga `components.json` (`packages/ui`, `apps/web`, `apps/admin`) bila berbeda
+
+## Menerapkan preset shadcn
+
+Preset saat ini: **`b5KJfbheS`** ([buka di shadcn create](https://ui.shadcn.com/create?preset=b5KJfbheS)) — `radix-mira` / base color `mist` / theme `sky` / font `Oxanium` / radius default / chart `sky`.
+
+```bash
+pnpm dlx shadcn@latest apply --preset b5KJfbheS -y -c apps/web
+```
+
+- Jalankan dari **path app** (sama seperti `add` — preflight butuh framework); theme ditulis ke `packages/ui/src/styles/globals.css`, komponen ke `packages/ui/src/components/`
+- `apply` menulis `components.json` cwd + `packages/ui` — **sinkronkan manual `apps/admin/components.json`** supaya ketiganya sama (`radix-mira` + `mist`)
+- Sesudah apply: pastikan `@source` di `globals.css` tidak hilang/duplikat, `pnpm format`, lalu `pnpm check && pnpm test && pnpm build`
 
 ## Menggunakan di app (Next.js)
 
