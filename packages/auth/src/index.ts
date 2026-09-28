@@ -8,7 +8,9 @@ export {
 } from './domain/password';
 export {
   DEFAULT_SESSION_TTL_HOURS,
+  DEFAULT_VERIFY_TTL_HOURS,
   getSessionTtlHours,
+  getVerifyTtlHours,
   signSessionToken,
   verifySessionToken,
   type SessionTokenClaims,

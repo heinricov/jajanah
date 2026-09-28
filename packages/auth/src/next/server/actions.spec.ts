@@ -2,7 +2,13 @@ import type { AuthUser, LoginRequest, RegisterRequest } from '@packages/validato
 
 import { AuthError } from '../../domain/errors';
 import { clearSessionCookie, getSessionToken, setSessionCookie } from './cookie';
-import { loginAction, logoutAction, meAction, registerAction } from './actions';
+import {
+  loginAction,
+  logoutAction,
+  meAction,
+  registerAction,
+  resendVerificationAction,
+} from './actions';
 
 jest.mock('next/headers', () => ({ cookies: jest.fn() }));
 jest.mock('../../domain/auth.service', () => ({
@@ -11,12 +17,16 @@ jest.mock('../../domain/auth.service', () => ({
     register: jest.fn(),
     logout: jest.fn(),
     authenticate: jest.fn(),
+    requestEmailVerification: jest.fn(),
   },
 }));
 jest.mock('./cookie', () => ({
   getSessionToken: jest.fn(),
   setSessionCookie: jest.fn(),
   clearSessionCookie: jest.fn(),
+}));
+jest.mock('@packages/email', () => ({
+  emailService: { sendConfirmation: jest.fn() },
 }));
 
 const { authService } = jest.requireMock('../../domain/auth.service') as {
@@ -25,7 +35,11 @@ const { authService } = jest.requireMock('../../domain/auth.service') as {
     register: jest.Mock;
     logout: jest.Mock;
     authenticate: jest.Mock;
+    requestEmailVerification: jest.Mock;
   };
+};
+const { emailService } = jest.requireMock('@packages/email') as {
+  emailService: { sendConfirmation: jest.Mock };
 };
 
 const user: AuthUser = {
@@ -35,6 +49,7 @@ const user: AuthUser = {
   role: 'USER',
   lastLoginAt: null,
   isActive: true,
+  emailVerified: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -92,20 +107,51 @@ describe('loginAction', () => {
 });
 
 describe('registerAction', () => {
-  it('berhasil: register + auto-login + set cookie', async () => {
+  it('berhasil: register TANPA auto-login — kirim email konfirmasi', async () => {
     authService.register.mockResolvedValue(user);
-    authService.login.mockResolvedValue(loginResponse);
-
-    await expect(registerAction(registerRequest)).resolves.toEqual({ ok: true, user });
-    expect(authService.register).toHaveBeenCalledWith(registerRequest);
-    expect(authService.login).toHaveBeenCalledWith({
-      email: registerRequest.email,
-      password: registerRequest.password,
+    authService.requestEmailVerification.mockResolvedValue({
+      token: 'tok-abc',
+      name: 'Budi',
+      email: 'budi@example.com',
     });
-    expect(setSessionCookie).toHaveBeenCalledWith('jwt-abc', loginResponse.expiresAt);
+    emailService.sendConfirmation.mockResolvedValue({ delivered: true });
+
+    await expect(registerAction(registerRequest)).resolves.toEqual({
+      ok: true,
+      user,
+      requiresEmailVerification: true,
+    });
+    expect(authService.register).toHaveBeenCalledWith(registerRequest);
+    expect(authService.requestEmailVerification).toHaveBeenCalledWith('budi@example.com');
+    expect(emailService.sendConfirmation).toHaveBeenCalledWith({
+      to: 'budi@example.com',
+      name: 'Budi',
+      link: expect.stringContaining('/auth/verify-email?token=tok-abc'),
+    });
+    expect(authService.login).not.toHaveBeenCalled();
+    expect(setSessionCookie).not.toHaveBeenCalled();
   });
 
-  it('email terdaftar: hasil gagal EMAIL_TAKEN tanpa auto-login', async () => {
+  it('kirim email gagal: pendaftaran tetap sukses (best-effort)', async () => {
+    authService.register.mockResolvedValue(user);
+    authService.requestEmailVerification.mockResolvedValue({
+      token: 'tok-abc',
+      name: 'Budi',
+      email: 'budi@example.com',
+    });
+    emailService.sendConfirmation.mockRejectedValue(new Error('smtp down'));
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(registerAction(registerRequest)).resolves.toEqual({
+      ok: true,
+      user,
+      requiresEmailVerification: true,
+    });
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('email terdaftar: hasil gagal EMAIL_TAKEN tanpa mengirim email', async () => {
     authService.register.mockRejectedValue(
       new AuthError('EMAIL_TAKEN', 'Email is already registered'),
     );
@@ -118,6 +164,42 @@ describe('registerAction', () => {
     });
     expect(authService.login).not.toHaveBeenCalled();
     expect(setSessionCookie).not.toHaveBeenCalled();
+    expect(authService.requestEmailVerification).not.toHaveBeenCalled();
+    expect(emailService.sendConfirmation).not.toHaveBeenCalled();
+  });
+});
+
+describe('resendVerificationAction', () => {
+  it('akun belum terverifikasi → kirim email konfirmasi baru, ok: true', async () => {
+    authService.requestEmailVerification.mockResolvedValue({
+      token: 'tok-2',
+      name: 'Budi',
+      email: 'budi@example.com',
+    });
+    emailService.sendConfirmation.mockResolvedValue({ delivered: true });
+
+    await expect(resendVerificationAction('budi@example.com')).resolves.toEqual({ ok: true });
+    expect(emailService.sendConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'budi@example.com', name: 'Budi' }),
+    );
+  });
+
+  it('email tak dikenal / sudah terverifikasi → ok: true tanpa email (anti-enumerasi)', async () => {
+    authService.requestEmailVerification.mockResolvedValue(null);
+
+    await expect(resendVerificationAction('orang@example.com')).resolves.toEqual({ ok: true });
+    expect(emailService.sendConfirmation).not.toHaveBeenCalled();
+  });
+
+  it('error server → hasil gagal INTERNAL (tanpa bocorkan detail)', async () => {
+    authService.requestEmailVerification.mockRejectedValue(new Error('db down'));
+
+    await expect(resendVerificationAction('budi@example.com')).resolves.toEqual({
+      ok: false,
+      status: 500,
+      code: 'INTERNAL',
+      message: 'Terjadi kesalahan di server.',
+    });
   });
 });
 

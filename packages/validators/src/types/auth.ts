@@ -18,6 +18,8 @@ export interface AuthUser {
   role: Role;
   lastLoginAt: string | null;
   isActive: boolean;
+  /** true bila konfirmasi email pertama sudah selesai (`Auth.emailVerifiedAt`). */
+  emailVerified: boolean;
   createdAt: string;
   updatedAt: string;
 }

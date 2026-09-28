@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
 import { FormLogin } from '@packages/ui/auth/';
-import { authErrorMessage, useAuth } from '@packages/auth/next';
+import { AuthActionError, authErrorMessage, useAuth } from '@packages/auth/next';
+import { resendVerificationAction } from '@packages/auth/next/server/actions';
 
 /** Pesan untuk `?error=` hasil redirect callback OAuth Google. */
 const OAUTH_ERRORS: Record<string, string> = {
@@ -15,14 +16,19 @@ const OAUTH_ERRORS: Record<string, string> = {
   oauth_email_unverified: 'Email Google belum terverifikasi. Coba gunakan akun lain.',
 };
 
+const VERIFIED_NOTICE = 'Email berhasil diverifikasi. Silakan masuk dengan email dan password.';
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status, login } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
   const [pending, setPending] = useState(false);
 
   const oauthError = OAUTH_ERRORS[searchParams.get('error') ?? ''] ?? null;
+  const verifiedNotice = searchParams.get('verified') === '1' ? VERIFIED_NOTICE : null;
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -30,9 +36,22 @@ function LoginForm() {
     }
   }, [status, router]);
 
+  async function handleResend(email: string) {
+    const result = await resendVerificationAction(email);
+    if (result.ok) {
+      setError(null);
+      setShowResend(false);
+      setNotice('Tautan konfirmasi baru telah dikirim. Periksa juga folder spam Anda.');
+    } else {
+      setError(result.message);
+    }
+  }
+
   return (
     <FormLogin
       error={oauthError ?? error}
+      notice={notice ?? verifiedNotice}
+      resend={!oauthError && showResend ? { onResend: handleResend } : undefined}
       isPending={pending}
       showSocial
       onSocialSubmit={(provider) => {
@@ -43,11 +62,13 @@ function LoginForm() {
       onSubmit={async ({ email, password }) => {
         setPending(true);
         setError(null);
+        setNotice(null);
         try {
           await login({ email, password });
           router.replace('/home');
         } catch (cause) {
           setError(authErrorMessage(cause));
+          setShowResend(cause instanceof AuthActionError && cause.code === 'EMAIL_NOT_VERIFIED');
         } finally {
           setPending(false);
         }

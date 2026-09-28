@@ -13,6 +13,15 @@ export type AuthActionFailure = {
 };
 
 export type LoginActionResult = { ok: true; user: AuthUser } | AuthActionFailure;
-export type RegisterActionResult = { ok: true; user: AuthUser } | AuthActionFailure;
+
+/**
+ * Register sukses TIDAK auto-login: akun dibuat dengan `emailVerifiedAt` null
+ * dan email konfirmasi dikirim — user harus membuka tautan dulu.
+ */
+export type RegisterActionResult =
+  { ok: true; user: AuthUser; requiresEmailVerification: true } | AuthActionFailure;
+
+/** Kirim ulang email konfirmasi — selalu `ok: true` bila tidak ada error server (anti-enumerasi). */
+export type ResendVerificationActionResult = { ok: true } | AuthActionFailure;
 export type LogoutActionResult = { ok: true };
 export type MeActionResult = { ok: true; user: AuthUser | null };

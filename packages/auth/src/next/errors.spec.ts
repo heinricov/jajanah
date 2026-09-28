@@ -19,6 +19,26 @@ describe('authErrorMessage', () => {
     );
   });
 
+  it('menerjemahkan kode EMAIL_NOT_VERIFIED ke pesan ramah', () => {
+    const error = new AuthActionError('Email has not been verified yet', {
+      status: 403,
+      code: 'EMAIL_NOT_VERIFIED',
+    });
+    expect(authErrorMessage(error)).toBe(
+      'Email Anda belum diverifikasi. Buka tautan konfirmasi di kotak masuk Anda.',
+    );
+  });
+
+  it('menerjemahkan kode INVALID_VERIFY_TOKEN ke pesan ramah', () => {
+    const error = new AuthActionError('Verification link is invalid or expired', {
+      status: 400,
+      code: 'INVALID_VERIFY_TOKEN',
+    });
+    expect(authErrorMessage(error)).toBe(
+      'Tautan konfirmasi tidak valid atau sudah kedaluwarsa. Kirim ulang email konfirmasi.',
+    );
+  });
+
   it('menerjemahkan kode TRANSPORT ke pesan koneksi', () => {
     expect(authErrorMessage(new AuthActionError('x', { status: 0, code: 'TRANSPORT' }))).toBe(
       'Tidak dapat terhubung ke server. Coba lagi nanti.',

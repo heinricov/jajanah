@@ -14,6 +14,9 @@ export class AuthActionError extends Error {
 const FRIENDLY_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Email atau password salah.',
   EMAIL_TAKEN: 'Email sudah terdaftar. Silakan masuk atau gunakan email lain.',
+  EMAIL_NOT_VERIFIED: 'Email Anda belum diverifikasi. Buka tautan konfirmasi di kotak masuk Anda.',
+  INVALID_VERIFY_TOKEN:
+    'Tautan konfirmasi tidak valid atau sudah kedaluwarsa. Kirim ulang email konfirmasi.',
   UNAUTHORIZED: 'Sesi Anda berakhir. Silakan masuk kembali.',
   FORBIDDEN: 'Anda tidak punya akses ke halaman ini.',
   VALIDATION: 'Periksa kembali isian Anda.',

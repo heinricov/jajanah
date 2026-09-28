@@ -33,7 +33,8 @@ export default function RegisterPage() {
         setError(null);
         try {
           await register({ name, email, password });
-          router.replace('/home');
+          // Tidak auto-login: akun menunggu konfirmasi email → halaman cek-email.
+          router.replace(`/auth/verify-email?sent=1&email=${encodeURIComponent(email)}`);
         } catch (cause) {
           setError(authErrorMessage(cause));
         } finally {

@@ -24,6 +24,16 @@ export type FormLoginProps = {
   isPending?: boolean;
   /** Pesan gagal dari API (dinormalisasi oleh `authErrorMessage`). */
   error?: React.ReactNode;
+  /** Pesan netral di bawah error (mis. "Email berhasil diverifikasi"). */
+  notice?: React.ReactNode;
+  /**
+   * Tombol "kirim ulang email konfirmasi" — tampil selama `error` ada.
+   * `onResend` menerima email yang sedang diisi di form.
+   */
+  resend?: {
+    label?: string;
+    onResend: (email: string) => Promise<void> | void;
+  };
   /** Blok sosial (tombol Google) di bawah form. */
   showSocial?: boolean;
   onSocialSubmit?: (provider: SocialProvider) => void;
@@ -41,6 +51,8 @@ export function FormLogin({
   onSubmit,
   isPending = false,
   error,
+  notice,
+  resend,
   showSocial = false,
   onSocialSubmit,
   forgotPasswordHref = '/auth/forgot-password',
@@ -51,6 +63,8 @@ export function FormLogin({
   footer,
 }: FormLoginProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [emailValue, setEmailValue] = useState('');
+  const [resendPending, setResendPending] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,6 +94,18 @@ export function FormLogin({
     });
   }
 
+  async function handleResend() {
+    if (!resend || resendPending) return;
+    const email = emailValue.trim();
+    if (!email) return;
+    setResendPending(true);
+    try {
+      await resend.onResend(email);
+    } finally {
+      setResendPending(false);
+    }
+  }
+
   return (
     <AuthCard
       title={title}
@@ -98,7 +124,23 @@ export function FormLogin({
         )
       }
     >
-      <FormBanner error={error} />
+      {error || notice ? (
+        <div className="flex flex-col items-start gap-1.5">
+          <FormBanner error={error} notice={notice} />
+          {resend && error ? (
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              className="h-auto px-0 text-xs"
+              disabled={resendPending}
+              onClick={handleResend}
+            >
+              {resendPending ? 'Mengirim…' : (resend.label ?? 'Kirim ulang email konfirmasi')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <form onSubmit={handleSubmit} noValidate>
         <FieldGroup>
           <Field>
@@ -109,7 +151,10 @@ export function FormLogin({
               type="email"
               placeholder="you@example.com"
               aria-invalid={!!errors.email}
-              onChange={() => clearError('email')}
+              onChange={(event) => {
+                setEmailValue(event.target.value);
+                clearError('email');
+              }}
             />
             <FieldError>{errors.email}</FieldError>
           </Field>

@@ -44,7 +44,7 @@ Didefinisikan di `src/contract.ts` + helper-nya:
 | Paginated | `{ data: T[], meta: { page, limit, total, totalPages, hasNext, hasPrevious } }` | `paginated(rows, createPaginationMeta(params, total))` |
 | Error     | `{ error: { status, code, message, details? } }`                                | `apiError()` / `validationError()` / `notFoundError()` |
 
-`code` union: `VALIDATION | BAD_REQUEST | UNAUTHORIZED | FORBIDDEN | NOT_FOUND | CONFLICT | EMAIL_TAKEN | INVALID_CREDENTIALS | INTERNAL`; status ada di konstanta `httpStatus`. (`EMAIL_TAKEN`/`INVALID_CREDENTIALS` dipakai domain auth `@packages/auth` → diterjemahkan exception filter `apps/api`.)
+`code` union: `VALIDATION | BAD_REQUEST | UNAUTHORIZED | FORBIDDEN | NOT_FOUND | CONFLICT | EMAIL_TAKEN | EMAIL_NOT_VERIFIED | INVALID_CREDENTIALS | OAUTH_ACCOUNT_LINKED | OAUTH_EMAIL_UNVERIFIED | INVALID_VERIFY_TOKEN | INTERNAL`; status ada di konstanta `httpStatus`. (Kode `EMAIL_*`/`INVALID_*`/`OAUTH_*` dipakai domain auth `@packages/auth` → diterjemahkan exception filter `apps/api`.)
 
 ## Pemakaian
 

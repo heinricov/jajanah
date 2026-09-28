@@ -1,5 +1,7 @@
 'use server';
 
+import { emailService } from '@packages/email';
+import { getEnv } from '@packages/environment';
 import type { LoginRequest, RegisterRequest } from '@packages/validators';
 
 import { authService } from '../../domain/auth.service';
@@ -11,6 +13,7 @@ import type {
   LogoutActionResult,
   MeActionResult,
   RegisterActionResult,
+  ResendVerificationActionResult,
 } from './action-types';
 
 /**
@@ -29,6 +32,32 @@ function toFailure(error: unknown): AuthActionFailure {
   return { ok: false, status: 500, code: 'INTERNAL', message: 'Terjadi kesalahan di server.' };
 }
 
+/** URL absolut tautan konfirmasi — basis dari `APP_URL` (default localhost sesuai `WEB_PORT`). */
+function verificationLink(token: string): string {
+  const base = (getEnv('APP_URL') ?? 'http://localhost:3000').replace(/\/+$/, '');
+  return `${base}/auth/verify-email?token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Kirim email konfirmasi — kegagalan pengiriman TIDAK merusak aksi (akun
+ * sudah terdaftar; user bisa meminta kirim ulang dari halaman verifikasi).
+ */
+async function sendVerificationMail(pending: {
+  token: string;
+  name: string;
+  email: string;
+}): Promise<void> {
+  try {
+    await emailService.sendConfirmation({
+      to: pending.email,
+      name: pending.name,
+      link: verificationLink(pending.token),
+    });
+  } catch (cause) {
+    console.error('[auth] gagal kirim email konfirmasi:', cause);
+  }
+}
+
 /** Login: verifikasi kredensial lalu set cookie sesi httpOnly. */
 export async function loginAction(request: LoginRequest): Promise<LoginActionResult> {
   try {
@@ -40,16 +69,32 @@ export async function loginAction(request: LoginRequest): Promise<LoginActionRes
   }
 }
 
-/** Register: buat akun lalu auto-login (set cookie sesi dari kredensial sama). */
+/**
+ * Register: buat akun (belum terverifikasi) + kirim email konfirmasi.
+ * TIDAK auto-login — sesi baru dibuat setelah tautan dibuka (`verifyEmail`).
+ */
 export async function registerAction(request: RegisterRequest): Promise<RegisterActionResult> {
   try {
-    await authService.register(request);
-    const result = await authService.login({
-      email: request.email,
-      password: request.password,
-    });
-    await setSessionCookie(result.token, result.expiresAt);
-    return { ok: true, user: result.user };
+    const user = await authService.register(request);
+    const pending = await authService.requestEmailVerification(user.email);
+    if (pending) await sendVerificationMail(pending);
+    return { ok: true, user, requiresEmailVerification: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+/**
+ * Kirim ulang email konfirmasi — respons sukses identik entah email dikenal,
+ * sudah terverifikasi, atau tidak ada (anti-enumerasi; token lama dinonaktifkan).
+ */
+export async function resendVerificationAction(
+  email: string,
+): Promise<ResendVerificationActionResult> {
+  try {
+    const pending = await authService.requestEmailVerification(email);
+    if (pending) await sendVerificationMail(pending);
+    return { ok: true };
   } catch (error) {
     return toFailure(error);
   }

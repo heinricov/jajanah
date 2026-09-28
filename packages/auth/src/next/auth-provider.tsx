@@ -59,8 +59,8 @@ export function AuthProvider({ initialUser, children }: AuthProviderProps) {
   const register = React.useCallback(async (request: RegisterRequest): Promise<AuthUser> => {
     const payload = await registerAction(request);
     if (!payload.ok) throw toActionError(payload);
-    setUser(payload.user);
-    setStatus('authenticated');
+    // TIDAK auto-login: akun menunggu konfirmasi email — state tetap
+    // unauthenticated, pemanggil (halaman register) mengarahkan ke cek-email.
     return payload.user;
   }, []);
 

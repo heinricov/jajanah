@@ -35,6 +35,15 @@ export function getSessionTtlHours(): number {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_SESSION_TTL_HOURS;
 }
 
+/** Default umur tautan konfirmasi email: 24 jam (override via `VERIFY_TOKEN_TTL_HOURS`). */
+export const DEFAULT_VERIFY_TTL_HOURS = 24;
+
+export function getVerifyTtlHours(): number {
+  const raw = getEnv('VERIFY_TOKEN_TTL_HOURS');
+  const value = raw === undefined || raw === '' ? Number.NaN : Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_VERIFY_TTL_HOURS;
+}
+
 function base64url(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64url');
 }

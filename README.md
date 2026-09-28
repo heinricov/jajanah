@@ -16,6 +16,7 @@ Monorepo yang dibangun dengan [Turborepo](https://turborepo.com) + [pnpm workspa
 │   ├── db/                # @packages/db — Prisma ORM 7 (PostgreSQL)
 │   ├── validators/        # @packages/validators — SSOT types + kontrak request/response API
 │   ├── auth/              # @packages/auth — SSOT domain auth (scrypt, JWT sesi, register/login/logout) + server actions Next
+│   ├── email/             # @packages/email — SSOT pengiriman email (adapter Resend + fallback console)
 │   ├── client/            # @packages/client — typed API client (satu-satunya jalur web → api)
 │   └── logger/            # @packages/logger — structured logger + request context (AsyncLocalStorage)
 ├── scripts/              # Script operasional (masih kosong)
@@ -132,6 +133,7 @@ import { getEnv, requireEnv, environment } from '@packages/environment';
 - **Base URL API client**: `NEXT_PUBLIC_API_URL` (di-inline Next ke bundle; dev = `http://localhost:3002` via `.env.development`, dasar = URL publik). Berbeda dari `API_BASE_URL` — alamat yang dilaporkan API tentang dirinya sendiri (field `baseUrl` di `GET /`).
 - **Logging backend**: `LOG_LEVEL` (`debug|info|warn|error`) & `LOG_FORMAT` (`json|pretty`) — dibaca `apps/api` via `getEnv` untuk `@packages/logger`. Default: info/json (prod), debug/pretty (dev), error (test via `.env.test`).
 - **Auth sesi**: `JWT_SECRET` (tanda tangan JWT HS256 — wajib; buat baru `openssl rand -base64 48`) & `AUTH_SESSION_TTL_HOURS` (umur sesi jam, default 168) — dibaca `@packages/auth` lazily. Nilai asli hanya di `.env` (gitignored), `.env.example` cukup placeholder.
+- **Konfirmasi email registrasi**: `RESEND_API_KEY` (API key [Resend](https://resend.com/api-keys) — kosong = fallback console, link tautan di-log server), `MAIL_FROM` (alamat pengirim), `APP_URL` (basis URL tautan konfirmasi, default `http://localhost:3000`) & `VERIFY_TOKEN_TTL_HOURS` (umur tautan jam, default 24) — dibaca `@packages/email` & `@packages/auth`. Lihat [`packages/email/README.md`](packages/email/README.md).
 - **Koneksi database**: `DATABASE_URL`, `POSTGRES_URL`, `PRISMA_DATABASE_URL` (nilainya sama). Dibaca `@packages/db` via `prisma.config.ts` yang meng-import `@packages/environment` — sama seperti consumer lain, Prisma tidak punya loader `.env` sendiri.
 - Precedence: `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` (yang belakangan menang); variabel yang sudah ada di `process.env` (shell/CI) **selalu** menang.
 - Mode mengikuti `NODE_ENV` (default `development`).
@@ -140,7 +142,7 @@ Detail lengkap (precedence, API `getEnv`/`requireEnv`/`environment`, cara menamb
 
 ## Database (Prisma)
 
-`packages/db` (`@packages/db`) adalah paket database tunggal: Prisma ORM 7 + PostgreSQL (driver adapter `@prisma/adapter-pg`). Schema (`prisma/schema.prisma`) berisi `enum Role` + model `Auth` & `Session` (migration versioned di `prisma/migrations/`), URL koneksi hidup di `prisma.config.ts` (dibaca dari `DATABASE_URL` root `.env` lewat `@packages/environment`), dan client hasil `generate` output ke `src/generated/prisma/` (di-gitignore). Konsumen cukup:
+`packages/db` (`@packages/db`) adalah paket database tunggal: Prisma ORM 7 + PostgreSQL (driver adapter `@prisma/adapter-pg`). Schema (`prisma/schema.prisma`) berisi `enum Role` + model `Auth`, `Session`, `OAuthAccount` & `EmailVerificationToken` (migration versioned di `prisma/migrations/`), URL koneksi hidup di `prisma.config.ts` (dibaca dari `DATABASE_URL` root `.env` lewat `@packages/environment`), dan client hasil `generate` output ke `src/generated/prisma/` (di-gitignore). Konsumen cukup:
 
 ```ts
 import { prisma } from '@packages/db';
@@ -220,8 +222,9 @@ await authService.logout(token); // hapus row Session by jti → token ter-revok
 ```
 
 - **Password**: `crypto.scrypt` + `timingSafeEqual` (zero dependency), tersimpan `scrypt$N$r$p$salt$hash`; login email tak dikenal tetap menjalankan scrypt (hash dummy) — timing setara, anti oracle.
+- **Konfirmasi email**: registrasi email+password membuat akun dengan `emailVerifiedAt` null → `login` ditolak `EMAIL_NOT_VERIFIED` (403) sampai user membuka tautan di email (`GET /auth/verify-email?token=…` → tandai terverifikasi → redirect ke halaman login). Pengiriman lewat [`@packages/email`](packages/email/README.md) (Resend; fallback console saat `RESEND_API_KEY` kosong), tombol kirim ulang tersedia di halaman cek-email & login (`resendVerificationAction` — respons identis untuk email apa pun, anti-enumerasi). Login Google otomatis terverifikasi.
 - **Token**: JWT HS256 (`node:crypto`, tanpa library eksternal) berisi `sub`/`jti`/`role`/`exp`; `jti` disimpan di kolom `Session.token` sehingga logout **bisa menarik token yang sudah terbit** (hybrid JWT + sesi DB, bukan JWT murni yang tak bisa di-revoke).
-- **Error domain** `AuthError` (`EMAIL_TAKEN` 409, `INVALID_CREDENTIALS` 401, `UNAUTHORIZED` 401) diterjemahkan `AllExceptionsFilter` `apps/api` ke envelope `{ error }` SSOT → sampai ke `ApiHttpError.code` di `@packages/client`.
+- **Error domain** `AuthError` (`EMAIL_TAKEN` 409, `EMAIL_NOT_VERIFIED` 403, `INVALID_CREDENTIALS` 401, `UNAUTHORIZED` 401, `INVALID_VERIFY_TOKEN` 400) diterjemahkan `AllExceptionsFilter` `apps/api` ke envelope `{ error }` SSOT → sampai ke `ApiHttpError.code` di `@packages/client`.
 - **HTTP** tetap di `apps/api` (`AuthController` + `AuthGuard` + decorator `@CurrentUser`/`@AuthToken`) untuk konsumen eksternal; guard juga menyetel `userId` di context ALS logger supaya log sesudah login otomatis membawa `userId`.
 - **Integrasi Next** (`apps/web` & `apps/admin`) **tidak lewat HTTP & tidak punya endpoint sendiri** — `loginAction`/`registerAction`/`logoutAction`/`meAction` (server actions `'use server'` di `@packages/auth/next/server`) memanggil `authService` langsung, mengatur cookie httpOnly di server, dan di-backup guard `requireAuth()`/`requireAdmin()` pada layout server. Proteksi Origin/CSRF datang dari mekanisme server action Next. **Pengecualian terdokumentasi** (hanya `apps/web`): `GET /api/auth/google` & `/api/auth/google/callback` (login Google) — OAuth2 butuh `redirect_uri` GET yang terdaftar di Google Console; dua route handler tipis itu memanggil gateway `@packages/auth/next/oauth`, tanpa logika lain di app.
 

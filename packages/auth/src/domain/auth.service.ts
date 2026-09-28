@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { prisma } from '@packages/db';
 import {
@@ -12,7 +12,12 @@ import {
 
 import { AuthError } from './errors';
 import { hashPassword, verifyPassword } from './password';
-import { getSessionTtlHours, signSessionToken, verifySessionToken } from './token';
+import {
+  getVerifyTtlHours,
+  getSessionTtlHours,
+  signSessionToken,
+  verifySessionToken,
+} from './token';
 
 export interface LoginContext {
   authAgent?: string | null;
@@ -40,6 +45,7 @@ type AuthRow = {
   role: Role;
   lastLoginAt: Date | null;
   isActive: boolean;
+  emailVerifiedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -56,6 +62,7 @@ function toAuthUser(row: AuthRow): AuthUser {
     role: row.role,
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
     isActive: row.isActive,
+    emailVerified: Boolean(row.emailVerifiedAt),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   });
@@ -117,6 +124,10 @@ export class AuthService {
     };
   }
 
+  /**
+   * Buat akun email+password baru (role USER). `emailVerifiedAt` tetap null
+   * sampai konfirmasi email pertama — `login` menolak sampai saat itu.
+   */
   async register(input: RegisterRequest): Promise<AuthUser> {
     const email = normalizeEmail(input.email);
     const existing = await prisma.auth.findUnique({ where: { email } });
@@ -144,6 +155,9 @@ export class AuthService {
     const passwordOk = await verifyPassword(input.password, storedHash);
     if (!user || !passwordOk || !user.isActive) {
       throw new AuthError('INVALID_CREDENTIALS', 'Invalid email or password');
+    }
+    if (!user.emailVerifiedAt) {
+      throw new AuthError('EMAIL_NOT_VERIFIED', 'Email has not been verified yet');
     }
 
     return this.createSession(user, context);
@@ -199,7 +213,14 @@ export class AuthService {
       let created: AuthRow;
       try {
         created = await prisma.auth.create({
-          data: { name: input.name.trim() || email, email, password: null, role: 'USER' },
+          data: {
+            name: input.name.trim() || email,
+            email,
+            password: null,
+            role: 'USER',
+            // Google sudah memastikan email terverifikasi → langsung tandai.
+            emailVerifiedAt: new Date(),
+          },
         });
       } catch (error) {
         if (isUniqueViolation(error)) {
@@ -229,7 +250,60 @@ export class AuthService {
 
     if (!auth.isActive) throw new AuthError('UNAUTHORIZED', 'Account is disabled');
 
+    // Google sudah memverifikasi emailnya — pastikan penanda terisi (akun lama
+    // dari sebelum fitur konfirmasi, atau akun password yang baru tertaut).
+    if (!auth.emailVerifiedAt) {
+      auth = await prisma.auth.update({
+        where: { id: auth.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+    }
+
     return this.createSession(auth, context);
+  }
+
+  /**
+   * Buat token konfirmasi email baru untuk akun dengan email tsb.
+   *
+   * Email tak dikenal / akun sudah terverifikasi → `null`: pemanggil wajib
+   * memperlakukan null sama dengan sukses (anti-enumerasi). Token lama
+   * dinonaktifkan — hanya tautan terbaru yang berlaku.
+   */
+  async requestEmailVerification(
+    email: string,
+  ): Promise<{ token: string; name: string; email: string } | null> {
+    const user = await prisma.auth.findUnique({ where: { email: normalizeEmail(email) } });
+    if (!user || user.emailVerifiedAt) return null;
+
+    await prisma.emailVerificationToken.deleteMany({ where: { authId: user.id } });
+    const token = randomBytes(32).toString('base64url');
+    await prisma.emailVerificationToken.create({
+      data: {
+        authId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + getVerifyTtlHours() * 3600 * 1000),
+      },
+    });
+    return { token, name: user.name, email: user.email };
+  }
+
+  /**
+   * Tukar token konfirmasi → tandai akun terverifikasi. Sekali pakai: semua
+   * token akun itu dihapus setelah sukses. Token hilang/kedaluwarsa →
+   * `INVALID_VERIFY_TOKEN` (400).
+   */
+  async verifyEmail(token: string): Promise<AuthUser> {
+    const record = await prisma.emailVerificationToken.findUnique({ where: { token } });
+    if (!record || record.expiresAt.getTime() <= Date.now()) {
+      throw new AuthError('INVALID_VERIFY_TOKEN', 'Verification link is invalid or expired');
+    }
+
+    await prisma.emailVerificationToken.deleteMany({ where: { authId: record.authId } });
+    const updated = await prisma.auth.update({
+      where: { id: record.authId },
+      data: { emailVerifiedAt: new Date() },
+    });
+    return toAuthUser(updated);
   }
 
   async logout(token: string): Promise<void> {

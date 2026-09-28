@@ -17,6 +17,10 @@
       "types": "./src/next/server/index.ts",
       "default": "./src/next/server/index.ts"
     },
+    "./next/server/actions": {
+      "types": "./src/next/server/actions.ts",
+      "default": "./src/next/server/actions.ts"
+    },
     "./next/cookie": {
       "types": "./src/next/cookie.ts",
       "default": "./src/next/cookie.ts"
@@ -34,6 +38,7 @@
   },
   "dependencies": {
     "@packages/db": "workspace:*",
+    "@packages/email": "workspace:*",
     "@packages/environment": "workspace:*",
     "@packages/validators": "workspace:*",
     "google-auth-library": "^11.1.0"

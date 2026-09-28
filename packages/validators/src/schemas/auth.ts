@@ -22,6 +22,7 @@ export const authUserSchema: z.ZodType<AuthUser> = z.object({
   role: roleSchema,
   lastLoginAt: z.iso.datetime().nullable(),
   isActive: z.boolean(),
+  emailVerified: z.boolean(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

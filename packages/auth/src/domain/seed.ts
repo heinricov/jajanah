@@ -48,6 +48,16 @@ async function main(): Promise<void> {
       console.log(
         `[seed] skip ${account.email} — sudah ada (password & sesi dibiarkan apa adanya)`,
       );
+      // Akun seed WAJIB lolos login: konfirmasi email dianggap selesai
+      // (akun dibuat sebelum fitur konfirmasi → emailVerifiedAt masih null).
+      if (!existing.emailVerifiedAt) {
+        await prisma.auth.update({
+          where: { id: existing.id },
+          data: { emailVerifiedAt: new Date() },
+        });
+        // eslint-disable-next-line no-console -- CLI seed, output ke stdout
+        console.log(`[seed] ${account.email} ditandai emailVerifiedAt (backfill)`);
+      }
       continue;
     }
 
@@ -58,6 +68,7 @@ async function main(): Promise<void> {
         email: account.email,
         password: passwordHash,
         role: account.role,
+        emailVerifiedAt: new Date(),
       },
     });
 

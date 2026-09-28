@@ -13,18 +13,23 @@ enum Role {
 }
 
 model Auth {
-  id          String    @id @default(uuid()) @db.Uuid
-  name        String
-  email       String    @unique
-  password    String?
-  role        Role      @default(USER)
-  lastLoginAt DateTime?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  email           String    @unique
+  password        String?
+  role            Role      @default(USER)
+  lastLoginAt     DateTime?
+  isActive        Boolean   @default(true)
+  /**
+   * Konfirmasi email pertama — null = belum diverifikasi (blokir login).
+   */
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  sessions        Session[]
-  oAuthAccounts   OAuthAccount[]
+  sessions                Session[]
+  oAuthAccounts           OAuthAccount[]
+  emailVerificationTokens EmailVerificationToken[]
 }
 
 model OAuthAccount {
@@ -38,6 +43,18 @@ model OAuthAccount {
   auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerId])
+  @@index([authId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  authId    String   @db.Uuid
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
+
   @@index([authId])
 }
 

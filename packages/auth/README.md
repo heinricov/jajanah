@@ -6,13 +6,14 @@
 - **`/next`** — integrasi Next.js (`next/`): `AuthProvider`/`useAuth` (client), server actions + guards (server), gateway OAuth Google (`next/oauth`), dan konstanta cookie — dikonsumsi `apps/web` & `apps/admin`. **Tidak ada route handler `/api/auth/*` per-app**; semua aksi memanggil domain langsung — _kecuali_ `/api/auth/google/*` di `apps/web` (lihat "Login dengan Google").
 
 ```
-register/login  ─┐
-logout          ─┼─►  @packages/auth  ─►  @packages/db (Auth + Session)
-authenticate    ─┘        │
-                          ├─ domain/password.ts  — scrypt + timingSafeEqual (zero-dep)
-                          ├─ domain/token.ts     — JWT HS256 (jti → kolom Session.token)
-                          ├─ domain/errors.ts    — AuthError { code, status } → filter di apps/api
-                          └─ next/               — AuthProvider, server actions, guards, cookie (Next.js)
+register/login   ─┐
+verify email     ─┼─►  @packages/auth  ─►  @packages/db (Auth + Session + token verifikasi)
+logout           ─┤        │
+authenticate     ─┘        ├─ domain/password.ts  — scrypt + timingSafeEqual (zero-dep)
+                           ├─ domain/token.ts     — JWT HS256 (jti → kolom Session.token)
+                           ├─ domain/errors.ts    — AuthError { code, status } → filter di apps/api
+                           ├─ next/               — AuthProvider, server actions, guards, cookie (Next.js)
+                           └─ @packages/email     — kirim email konfirmasi (Resend / fallback console)
 ```
 
 ## Model sesi: JWT + Session (hybrid)
@@ -51,23 +52,25 @@ await authService.logout(token);
 
 Subpath untuk `apps/web` & `apps/admin` — **source export** (`src/next/*.ts`), di-compile konsumen lewat `transpilePackages: ['@packages/auth']` (lihat `configs/next`):
 
-| Subpath                      | Isi                                                                                                          | Dipakai di                         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `@packages/auth/next`        | `AuthProvider`, `useAuth`, `authErrorMessage`                                                                | root layout, halaman auth (client) |
-| `@packages/auth/next/server` | `getSessionUser`, `requireAuth`, `requireAdmin`, `loginAction`, `registerAction`, `logoutAction`, `meAction` | `(protected)/layout`, `app/layout` |
-| `@packages/auth/next/cookie` | `SESSION_COOKIE` (`tj_token`) — tanpa `next/headers`                                                         | `proxy.ts` (edge)                  |
-| `@packages/auth/next/oauth`  | `beginGoogleOAuth`, `completeGoogleOAuth` (gateway OAuth Google)                                             | route handler `/api/auth/google*`  |
+| Subpath                              | Isi                                                                                                                                                        | Dipakai di                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `@packages/auth/next`                | `AuthProvider`, `useAuth`, `authErrorMessage`                                                                                                              | root layout, halaman auth (client)   |
+| `@packages/auth/next/server`         | `getSessionUser`, `requireAuth`, `requireAdmin`, `loginAction`, `registerAction`, `logoutAction`, `meAction`                                               | `(protected)/layout`, `app/layout`   |
+| `@packages/auth/next/server/actions` | server actions langsung (`'use server'`) — **dipakai komponen client**: barrel `/next/server` menarik `next/headers`/domain ke bundle client → error build | halaman login + `ResendVerification` |
+| `@packages/auth/next/cookie`         | `SESSION_COOKIE` (`tj_token`) — tanpa `next/headers`                                                                                                       | `proxy.ts` (edge)                    |
+| `@packages/auth/next/oauth`          | `beginGoogleOAuth`, `completeGoogleOAuth` (gateway OAuth Google)                                                                                           | route handler `/api/auth/google*`    |
 
 ### Server actions, bukan route handler
 
 Auth dijalankan lewat **Server Actions** (`'use server'`) yang ada di package ini — aplikasi Next **tidak mendefinisikan API apa pun** (satu pengecualian: `/api/auth/google/*`, lihat "Login dengan Google"):
 
-| Action           | Peran                                                                   |
-| ---------------- | ----------------------------------------------------------------------- |
-| `loginAction`    | `authService.login` → set cookie httpOnly → `{ ok: true, user }`        |
-| `registerAction` | `authService.register` + auto-login → set cookie → `{ ok: true, user }` |
-| `logoutAction`   | revoke sesi (best-effort) + hapus cookie → `{ ok: true }`               |
-| `meAction`       | cookie → `authService.authenticate` → `{ ok: true, user \| null }`      |
+| Action                     | Peran                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `loginAction`              | `authService.login` → set cookie httpOnly → `{ ok: true, user }`                                                               |
+| `registerAction`           | `authService.register` (**tanpa auto-login**) + kirim email konfirmasi → `{ ok: true, user, requiresEmailVerification: true }` |
+| `resendVerificationAction` | `requestEmailVerification` + kirim ulang email → `{ ok: true }` selalu (respons identis — anti-enumerasi)                      |
+| `logoutAction`             | revoke sesi (best-effort) + hapus cookie → `{ ok: true }`                                                                      |
+| `meAction`                 | cookie → `authService.authenticate` → `{ ok: true, user \| null }`                                                             |
 
 Hasil gagal adalah objek polos `{ ok: false, status, code, message }` (class error tidak bisa melewati batas RPC) — `AuthProvider` menaikkannya kembali ke `AuthActionError`, sehingga kontrak error UI (`authErrorMessage`) tidak berubah. Server action juga membawa proteksi Origin/CSRF bawaan Next.
 
@@ -93,12 +96,42 @@ Error domain memakai `AuthError` dengan `code` dari `API_ERROR_CODES` (`@package
 | Code                     | Status | Kapan                                               |
 | ------------------------ | ------ | --------------------------------------------------- |
 | `EMAIL_TAKEN`            | 409    | email sudah terdaftar (+race P2002)                 |
+| `EMAIL_NOT_VERIFIED`     | 403    | login password sebelum konfirmasi email pertama     |
 | `INVALID_CREDENTIALS`    | 401    | email salah / password salah / non-aktif            |
 | `UNAUTHORIZED`           | 401    | token rusak/kedaluwarsa/sesi hilang                 |
 | `OAUTH_ACCOUNT_LINKED`   | 409    | `(provider, providerId)` sudah tertaut ke akun lain |
 | `OAUTH_EMAIL_UNVERIFIED` | 400    | `email_verified` di ID token Google false           |
+| `INVALID_VERIFY_TOKEN`   | 400    | tautan konfirmasi hilang/kedaluwarsa/sudah dipakai  |
 
 `AuthError` diterjemahkan exception filter `apps/api` (`AllExceptionsFilter`) ke envelope `{ error: { status, code, message } }` — kode error SSOT sampai ke `ApiHttpError` di `@packages/client`.
+
+## Konfirmasi email registrasi
+
+Registrasi **email + password** wajib dikonfirmasi dulu lewat email — sampai saat itu `login` menolak dengan `EMAIL_NOT_VERIFIED` (403). Akun OAuth Google tidak terpengaruh (Google sudah memverifikasi emailnya → `emailVerifiedAt` langsung terisi).
+
+```
+registerAction (apps/web)
+  → authService.register                — buat akun, emailVerifiedAt = null
+  → authService.requestEmailVerification — token acak 32 byte, TTL VERIFY_TOKEN_TTL_HOURS (default 24 jam),
+                                           token lama dinonaktifkan (hanya tautan terbaru berlaku)
+  → @packages/email sendConfirmation     — link ${APP_URL}/auth/verify-email?token=…
+                                           (gagal kirim TIDAK membatalkan pendaftaran → tombol kirim ulang)
+  → { ok: true, requiresEmailVerification: true } — TANPA auto-login → redirect /auth/verify-email?sent=1
+
+GET /auth/verify-email?token=… (server component — tanpa route handler)
+  → authService.verifyEmail              — token valid: tandai emailVerifiedAt + hapus semua token (sekali pakai)
+                                           → redirect /auth/login?verified=1 (tanpa auto-login)
+  → token hilang/kedaluwarsa            — INVALID_VERIFY_TOKEN (400) → kartu "tautan tidak valid"
+
+loginAction
+  → password ok + isActive tapi emailVerifiedAt null → EMAIL_NOT_VERIFIED (403)
+  → UI menampilkan pesan ramah + tombol "Kirim ulang email konfirmasi" (resendVerificationAction)
+```
+
+- Token disimpan di tabel `EmailVerificationToken` (unik, one-time — dihapus saat dipakai/diganti), bukan JWT — supaya bisa di-revoke lewat kirim ulang.
+- `requestEmailVerification` mengembalikan `null` untuk email tak dikenal/sudah terverifikasi; `resendVerificationAction` tetap membalas `{ ok: true }` (respons identis — anti-enumerasi).
+- Pengiriman email ada di [`@packages/email`](../email/README.md) (adapter Resend, fallback console saat `RESEND_API_KEY` kosong).
+- Seed admin/user demo ditandai terverifikasi otomatis (`db:seed` melakukan backfill `emailVerifiedAt` untuk akun lama).
 
 ## Login dengan Google (OAuth)
 
@@ -169,31 +202,33 @@ Troubleshooting & catatan:
 
 ## Environment
 
-| Variabel                 | Default   | Deskripsi                                                                                |
-| ------------------------ | --------- | ---------------------------------------------------------------------------------------- |
-| `JWT_SECRET`             | — (wajib) | Tanda tangan JWT HS256. Buat: `openssl rand -base64 48`. Hanya di `.env` (gitignored).   |
-| `AUTH_SESSION_TTL_HOURS` | `168`     | Umur sesi (jam). Tidak valid → fallback default.                                         |
-| `GOOGLE_CLIENT_ID`       | —         | OAuth client ID Google (Web application). Kosong → `oauth_config` (hanya apps/web).      |
-| `GOOGLE_CLIENT_SECRET`   | —         | OAuth client secret Google. Isi di root `.env` — panduan: "Login dengan Google (OAuth)". |
+| Variabel                 | Default                 | Deskripsi                                                                                |
+| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------- |
+| `JWT_SECRET`             | — (wajib)               | Tanda tangan JWT HS256. Buat: `openssl rand -base64 48`. Hanya di `.env` (gitignored).   |
+| `AUTH_SESSION_TTL_HOURS` | `168`                   | Umur sesi (jam). Tidak valid → fallback default.                                         |
+| `VERIFY_TOKEN_TTL_HOURS` | `24`                    | Umur tautan konfirmasi email (jam). Tidak valid → fallback default.                      |
+| `APP_URL`                | `http://localhost:3000` | Basis URL tautan konfirmasi email (`/auth/verify-email?token=…`).                        |
+| `GOOGLE_CLIENT_ID`       | —                       | OAuth client ID Google (Web application). Kosong → `oauth_config` (hanya apps/web).      |
+| `GOOGLE_CLIENT_SECRET`   | —                       | OAuth client secret Google. Isi di root `.env` — panduan: "Login dengan Google (OAuth)". |
 
-Nilai env dibaca via `@packages/environment` (root `.env*`, SSOT).
+Nilai env dibaca via `@packages/environment` (root `.env*`, SSOT). Pengiriman email memakai `RESEND_API_KEY` & `MAIL_FROM` — lihat [`@packages/email`](../email/README.md).
 
 ## Struktur
 
 ```
 packages/auth/
-├── package.json          # exports: ".", "./next", "./next/server", "./next/cookie", "./next/oauth"
+├── package.json          # exports: ".", "./next", "./next/server", "./next/server/actions", "./next/cookie", "./next/oauth"
 ├── tsconfig.json         # extends node.json; + jsx react-jsx, lib DOM, include .tsx
 ├── tsconfig.build.json   # emit CJS + d.ts → dist/ (spec & src/next/** di-exclude)
 ├── eslint.config.mjs     # re-export @configs/eslint/react
 └── src/
     ├── index.ts              # aggregator publik root: re-export dari domain/
     ├── domain/               # mesin auth (Node + Prisma)
-    │   ├── auth.service.ts   # register / login / logout / authenticate / oauthLogin
+    │   ├── auth.service.ts   # register / login / logout / authenticate / oauthLogin / requestEmailVerification / verifyEmail
     │   ├── password.ts       # hashPassword / verifyPassword (scrypt)
-    │   ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256)
+    │   ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256) + getVerifyTtlHours
     │   ├── errors.ts         # AuthError { code, status }
-    │   ├── seed.ts           # seed idempotent admin + user demo (dipanggil @packages/db)
+    │   ├── seed.ts           # seed idempotent admin + user demo (backfill emailVerifiedAt)
     │   └── *.spec.ts         # unit test domain
     └── next/                 # integrasi Next.js
         ├── index.ts          # AuthProvider, useAuth, authErrorMessage, SESSION_COOKIE
@@ -202,7 +237,7 @@ packages/auth/
         ├── errors.ts         # AuthActionError + authErrorMessage
         ├── oauth.ts          # beginGoogleOAuth / completeGoogleOAuth (state + Google OAuth2)
         └── server/           # guards, server actions, opsi kuki (+ spec)
-            ├── actions.ts    # 'use server' — login/register/logout/me (ke domain langsung)
+            ├── actions.ts    # 'use server' — login/register/resend/logout/me (ke domain langsung)
             ├── action-types.ts # tipe hasil JSON { ok, ... }
             ├── guards.ts     # getSessionUser / requireAuth / requireAdmin
             └── cookie-options.ts
