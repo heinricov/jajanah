@@ -101,3 +101,4 @@ pnpm --filter @packages/db db:seed
 - **Prisma 7** membutuhkan _driver adapter_: klien dibuat via `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })` — sudah dibungkus `createPrisma()`.
 - `prisma.config.ts` memuat env dari root `.env*` via `@packages/environment`; `datasource.url` memakai `DATABASE_URL`. Variabel `POSTGRES_URL` / `PRISMA_DATABASE_URL` tersedia untuk tooling lain (semua ada di `.env.example`).
 - Kredensial database **hanya** di `.env` (gitignored) — `.env.example` cukup placeholder.
+- Ekspor `prisma` **lazy** (Proxy): meng-import package aman tanpa `DATABASE_URL` (mis. `next build` di CI yang hanya mengumpulkan page data) — client dibuat saat akses pertama, error `Missing DATABASE_URL` tetap muncul pada query pertama bila env kosong.

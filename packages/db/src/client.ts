@@ -14,4 +14,25 @@ export function createPrisma(connectionString: string = process.env.DATABASE_URL
   return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 }
 
-export const prisma: DbClient = createPrisma();
+let instance: DbClient | undefined;
+
+function getClient(): DbClient {
+  instance ??= createPrisma();
+  return instance;
+}
+
+/**
+ * Lazy proxy — client dibuat saat pertama kali diakses, bukan saat module
+ * di-import. Import aman tanpa `DATABASE_URL` (mis. `next build` di CI yang
+ * hanya mengumpulkan page data); pesan error yang sama tetap muncul pada
+ * query pertama bila env kosong.
+ */
+export const prisma: DbClient = new Proxy({} as DbClient, {
+  get: (_target, property) => {
+    const client = getClient();
+    const value = Reflect.get(client, property, client);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+  set: (_target, property, value) => Reflect.set(getClient(), property, value),
+  has: (_target, property) => Reflect.has(getClient(), property),
+});
