@@ -2,12 +2,13 @@ jest.mock('@packages/db', () => ({
   prisma: {
     auth: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     session: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
+    oAuthAccount: { findUnique: jest.fn(), create: jest.fn() },
   },
 }));
 
 import { randomUUID } from 'node:crypto';
 
-import { authService } from './auth.service';
+import { authService, type OAuthLoginInput } from './auth.service';
 import { AuthError } from './errors';
 import { hashPassword } from './password';
 import { signSessionToken, verifySessionToken } from './token';
@@ -16,7 +17,7 @@ type AuthRow = {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password: string | null;
   role: 'USER' | 'ADMIN';
   lastLoginAt: Date | null;
   isActive: boolean;
@@ -28,6 +29,7 @@ const { prisma } = jest.requireMock('@packages/db') as {
   prisma: {
     auth: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
     session: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
+    oAuthAccount: { findUnique: jest.Mock; create: jest.Mock };
   };
 };
 
@@ -53,6 +55,30 @@ async function captureError(promise: Promise<unknown>): Promise<AuthError> {
     return error as AuthError;
   }
   throw new Error('Expected promise to reject');
+}
+
+const LAST_LOGIN = '2026-09-28T10:00:00.000Z';
+
+/** Siapkan mock jalur `createSession` (update lastLoginAt + buat Session). */
+function mockSessionLifecycle(row: AuthRow): void {
+  prisma.auth.update.mockResolvedValue({
+    ...row,
+    lastLoginAt: new Date(LAST_LOGIN),
+    updatedAt: new Date(LAST_LOGIN),
+  });
+  prisma.session.deleteMany.mockResolvedValue({ count: 0 });
+  prisma.session.create.mockResolvedValue({ id: 'session-1' });
+}
+
+function makeOAuthInput(overrides: Partial<OAuthLoginInput> = {}): OAuthLoginInput {
+  return {
+    provider: 'google',
+    providerId: 'google-sub-123',
+    email: 'budi@example.com',
+    name: 'Budi',
+    emailVerified: true,
+    ...overrides,
+  };
 }
 
 describe('AuthService', () => {
@@ -153,6 +179,18 @@ describe('AuthService', () => {
       expect(prisma.session.create).not.toHaveBeenCalled();
     });
 
+    it('menolak login password pada akun OAuth (password null)', async () => {
+      prisma.auth.findUnique.mockResolvedValue(makeRow({ password: null }));
+
+      const error = await captureError(
+        authService.login({ email: 'budi@example.com', password: 'password123' }),
+      );
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('INVALID_CREDENTIALS');
+      expect(prisma.session.create).not.toHaveBeenCalled();
+    });
+
     it('login sukses — buat sesi, perbarui lastLoginAt, kirim token JWT', async () => {
       const row = makeRow({ password: await hashPassword('password123') });
       const updatedAt = new Date('2026-09-26T10:00:00.000Z');
@@ -194,6 +232,138 @@ describe('AuthService', () => {
         where: { id: row.id },
         data: { lastLoginAt: expect.any(Date) },
       });
+    });
+  });
+
+  describe('oauthLogin', () => {
+    it('menolak email Google yang belum terverifikasi tanpa menyentuh DB', async () => {
+      const error = await captureError(
+        authService.oauthLogin(makeOAuthInput({ emailVerified: false })),
+      );
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('OAUTH_EMAIL_UNVERIFIED');
+      expect(error.status).toBe(400);
+      expect(prisma.oAuthAccount.findUnique).not.toHaveBeenCalled();
+      expect(prisma.auth.create).not.toHaveBeenCalled();
+      expect(prisma.session.create).not.toHaveBeenCalled();
+    });
+
+    it('menolak providerId kosong (401 INVALID_CREDENTIALS)', async () => {
+      const error = await captureError(authService.oauthLogin(makeOAuthInput({ providerId: '' })));
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('INVALID_CREDENTIALS');
+      expect(prisma.oAuthAccount.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('email baru — buat akun password:null + link OAuthAccount + sesi', async () => {
+      const row = makeRow({ password: null });
+      prisma.oAuthAccount.findUnique.mockResolvedValue(null);
+      prisma.auth.findUnique.mockResolvedValue(null);
+      prisma.auth.create.mockResolvedValue(row);
+      prisma.oAuthAccount.create.mockResolvedValue({ id: 'oa-1' });
+      mockSessionLifecycle(row);
+
+      const response = await authService.oauthLogin(
+        makeOAuthInput({ email: '  Budi@Example.COM ' }),
+        { authAgent: 'jest-agent', ipAddress: '127.0.0.1' },
+      );
+
+      const createArgs = prisma.auth.create.mock.calls[0]?.[0] as {
+        data: { email: string; password: string | null; role: string };
+      };
+      expect(createArgs.data.email).toBe('budi@example.com');
+      expect(createArgs.data.password).toBeNull();
+      expect(createArgs.data.role).toBe('USER');
+
+      const linkArgs = prisma.oAuthAccount.create.mock.calls[0]?.[0] as {
+        data: { provider: string; providerId: string; authId: string };
+      };
+      expect(linkArgs.data).toMatchObject({
+        provider: 'google',
+        providerId: 'google-sub-123',
+        authId: row.id,
+      });
+
+      expect(response.user.email).toBe(row.email);
+      expect(response.user.lastLoginAt).toBe(LAST_LOGIN);
+      expect(verifySessionToken(response.token)?.sub).toBe(row.id);
+      expect(prisma.session.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('email sudah punya akun password — link otomatis, tanpa akun baru', async () => {
+      const row = makeRow({ password: await hashPassword('password123') });
+      prisma.oAuthAccount.findUnique.mockResolvedValue(null);
+      prisma.auth.findUnique.mockResolvedValue(row);
+      prisma.oAuthAccount.create.mockResolvedValue({ id: 'oa-2' });
+      mockSessionLifecycle(row);
+
+      const response = await authService.oauthLogin(makeOAuthInput());
+
+      expect(prisma.auth.create).not.toHaveBeenCalled();
+      const linkArgs = prisma.oAuthAccount.create.mock.calls[0]?.[0] as {
+        data: { authId: string };
+      };
+      expect(linkArgs.data.authId).toBe(row.id);
+      expect(response.user.id).toBe(row.id);
+      expect(verifySessionToken(response.token)).not.toBeNull();
+    });
+
+    it('sudah tertaut — masuk langsung ke akun terkait tanpa lookup email', async () => {
+      const row = makeRow({ password: null });
+      prisma.oAuthAccount.findUnique.mockResolvedValue({ auth: row });
+      mockSessionLifecycle(row);
+
+      const response = await authService.oauthLogin(makeOAuthInput());
+
+      expect(response.user.id).toBe(row.id);
+      expect(prisma.auth.findUnique).not.toHaveBeenCalled();
+      expect(prisma.auth.create).not.toHaveBeenCalled();
+      expect(prisma.oAuthAccount.create).not.toHaveBeenCalled();
+      expect(prisma.session.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('menerjemahkan race link (P2002) ke OAUTH_ACCOUNT_LINKED (409)', async () => {
+      const row = makeRow();
+      prisma.oAuthAccount.findUnique.mockResolvedValue(null);
+      prisma.auth.findUnique.mockResolvedValue(row);
+      prisma.oAuthAccount.create.mockRejectedValue({ code: 'P2002' });
+
+      const error = await captureError(authService.oauthLogin(makeOAuthInput()));
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('OAUTH_ACCOUNT_LINKED');
+      expect(error.status).toBe(409);
+      expect(prisma.session.create).not.toHaveBeenCalled();
+    });
+
+    it('menerjemahkan race email baru (P2002) — retry sekali lalu tetap masuk', async () => {
+      const raced = makeRow({ password: null });
+      prisma.oAuthAccount.findUnique.mockResolvedValue(null);
+      prisma.auth.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(raced);
+      prisma.auth.create.mockRejectedValue({ code: 'P2002' });
+      prisma.oAuthAccount.create.mockResolvedValue({ id: 'oa-3' });
+      mockSessionLifecycle(raced);
+
+      const response = await authService.oauthLogin(makeOAuthInput());
+
+      expect(prisma.auth.findUnique).toHaveBeenCalledTimes(2);
+      expect(prisma.auth.create).toHaveBeenCalledTimes(1);
+      expect(response.user.id).toBe(raced.id);
+      expect(verifySessionToken(response.token)?.sub).toBe(raced.id);
+    });
+
+    it('menolak akun non-aktif meski sudah tertaut (401 UNAUTHORIZED)', async () => {
+      prisma.oAuthAccount.findUnique.mockResolvedValue({
+        auth: makeRow({ password: null, isActive: false }),
+      });
+
+      const error = await captureError(authService.oauthLogin(makeOAuthInput()));
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('UNAUTHORIZED');
+      expect(prisma.session.create).not.toHaveBeenCalled();
     });
   });
 

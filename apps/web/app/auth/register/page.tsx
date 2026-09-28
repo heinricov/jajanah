@@ -22,7 +22,12 @@ export default function RegisterPage() {
     <FormRegister
       error={error}
       isPending={pending}
-      showSocial={false}
+      showSocial
+      onSocialSubmit={(provider) => {
+        if (provider !== 'google') return;
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- OAuth butuh full navigation ke GET /api/auth/google (redirect ke consent screen Google)
+        window.location.assign('/api/auth/google');
+      }}
       onSubmit={async ({ name, email, password }) => {
         setPending(true);
         setError(null);

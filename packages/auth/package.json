@@ -20,6 +20,10 @@
     "./next/cookie": {
       "types": "./src/next/cookie.ts",
       "default": "./src/next/cookie.ts"
+    },
+    "./next/oauth": {
+      "types": "./src/next/oauth.ts",
+      "default": "./src/next/oauth.ts"
     }
   },
   "scripts": {
@@ -31,7 +35,8 @@
   "dependencies": {
     "@packages/db": "workspace:*",
     "@packages/environment": "workspace:*",
-    "@packages/validators": "workspace:*"
+    "@packages/validators": "workspace:*",
+    "google-auth-library": "^11.1.0"
   },
   "peerDependencies": {
     "next": "^16.3.6",

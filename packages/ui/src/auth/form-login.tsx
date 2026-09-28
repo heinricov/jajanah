@@ -10,6 +10,7 @@ import { Input } from '@packages/ui/components/input';
 import { AuthCard } from './auth-card';
 import { FormBanner } from './form-banner';
 import { PasswordInput } from './password-input';
+import { SocialAuth, type SocialProvider } from './social-buttons';
 
 const signInSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -23,6 +24,9 @@ export type FormLoginProps = {
   isPending?: boolean;
   /** Pesan gagal dari API (dinormalisasi oleh `authErrorMessage`). */
   error?: React.ReactNode;
+  /** Blok sosial (tombol Google) di bawah form. */
+  showSocial?: boolean;
+  onSocialSubmit?: (provider: SocialProvider) => void;
   forgotPasswordHref?: string;
   registerHref?: string;
   title?: React.ReactNode;
@@ -37,6 +41,8 @@ export function FormLogin({
   onSubmit,
   isPending = false,
   error,
+  showSocial = false,
+  onSocialSubmit,
   forgotPasswordHref = '/auth/forgot-password',
   registerHref = '/auth/register',
   title = 'Sign In To Acme',
@@ -132,6 +138,8 @@ export function FormLogin({
           </Button>
         </FieldGroup>
       </form>
+
+      {showSocial ? <SocialAuth onSocialSubmit={onSocialSubmit} /> : null}
     </AuthCard>
   );
 }

@@ -13,7 +13,7 @@ packages/ui/
 ├── postcss.config.mjs     # @tailwindcss/postcss — di-reexport app (SSOT)
 └── src/
     ├── components/        # Komponen shadcn (button, card, input, badge, …)
-    ├── auth/              # Form auth (form-login/register/forgot-password/new-password, auth-card, password-input, user-auth) — logo AppLogo di tengah layar
+    ├── auth/              # Form auth (form-login/register/forgot-password/new-password, auth-card, password-input, social-buttons, user-auth) — logo AppLogo di tengah layar
     ├── navigations/       # Navbar & Footer (server component, props-driven; dipanggil di layout app)
     ├── dashboard/         # Layout dashboard (app-layout, app-sidebar, nav-*, team-switcher)
     ├── apps/              # Logo aplikasi (app-logo)

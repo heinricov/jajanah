@@ -223,7 +223,7 @@ await authService.logout(token); // hapus row Session by jti → token ter-revok
 - **Token**: JWT HS256 (`node:crypto`, tanpa library eksternal) berisi `sub`/`jti`/`role`/`exp`; `jti` disimpan di kolom `Session.token` sehingga logout **bisa menarik token yang sudah terbit** (hybrid JWT + sesi DB, bukan JWT murni yang tak bisa di-revoke).
 - **Error domain** `AuthError` (`EMAIL_TAKEN` 409, `INVALID_CREDENTIALS` 401, `UNAUTHORIZED` 401) diterjemahkan `AllExceptionsFilter` `apps/api` ke envelope `{ error }` SSOT → sampai ke `ApiHttpError.code` di `@packages/client`.
 - **HTTP** tetap di `apps/api` (`AuthController` + `AuthGuard` + decorator `@CurrentUser`/`@AuthToken`) untuk konsumen eksternal; guard juga menyetel `userId` di context ALS logger supaya log sesudah login otomatis membawa `userId`.
-- **Integrasi Next** (`apps/web` & `apps/admin`) **tidak lewat HTTP & tidak punya endpoint sendiri** — `loginAction`/`registerAction`/`logoutAction`/`meAction` (server actions `'use server'` di `@packages/auth/next/server`) memanggil `authService` langsung, mengatur cookie httpOnly di server, dan di-backup guard `requireAuth()`/`requireAdmin()` pada layout server. Proteksi Origin/CSRF datang dari mekanisme server action Next.
+- **Integrasi Next** (`apps/web` & `apps/admin`) **tidak lewat HTTP & tidak punya endpoint sendiri** — `loginAction`/`registerAction`/`logoutAction`/`meAction` (server actions `'use server'` di `@packages/auth/next/server`) memanggil `authService` langsung, mengatur cookie httpOnly di server, dan di-backup guard `requireAuth()`/`requireAdmin()` pada layout server. Proteksi Origin/CSRF datang dari mekanisme server action Next. **Pengecualian terdokumentasi** (hanya `apps/web`): `GET /api/auth/google` & `/api/auth/google/callback` (login Google) — OAuth2 butuh `redirect_uri` GET yang terdaftar di Google Console; dua route handler tipis itu memanggil gateway `@packages/auth/next/oauth`, tanpa logika lain di app.
 
 Detail (desain, env `JWT_SECRET`/`AUTH_SESSION_TTL_HOURS`, cara pakai): lihat [`packages/auth/README.md`](packages/auth/README.md).
 
@@ -266,7 +266,7 @@ Detail (desain, env `JWT_SECRET`/`AUTH_SESSION_TTL_HOURS`, cara pakai): lihat [`
 - Konfigurasi hidup **hanya** di `configs/` — workspace lain hanya extend/import.
 - Nilai environment hidup **hanya** di file `.env*` root — jangan membuat `.env` lokal di app/package.
 - Kontrak request/response API (interface + Zod schema + class-validator DTO) hidup **hanya** di `packages/validators` — apps import dari sana, jangan deklarasikan ulang.
-- Komunikasi web → API **hanya** lewat `@packages/client` — jangan memanggil `fetch()` ke `apps/api` secara langsung. **Pengecualian auth**: login/register/logout/me di web/admin lewat server actions `@packages/auth` (domain langsung, tanpa HTTP).
+- Komunikasi web → API **hanya** lewat `@packages/client` — jangan memanggil `fetch()` ke `apps/api` secara langsung. **Pengecualian auth**: login/register/logout/me di web/admin lewat server actions `@packages/auth` (domain langsung, tanpa HTTP); satu-satunya route handler auth adalah `GET /api/auth/google*` di `apps/web` (OAuth Google → gateway `@packages/auth/next/oauth`, bukan `apps/api`).
 - Dependency dipasang di workspace yang **langsung** menggunakannya; versi yang dipakai bersama harus konsisten.
 - Referensi antar workspace selalu pakai protokol `workspace:*`.
 - `pnpm-lock.yaml` adalah satu-satunya sumber kebenaran resolusi dependency — jangan commit `node_modules/`.

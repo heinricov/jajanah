@@ -3,7 +3,7 @@
 **SSOT otentikasi** — satu-satunya tempat logika register/login/logout/verifikasi token, hashing password, pembuatan sesi, dan integrasi auth ke app didefinisikan. Dua lapisan dalam satu package:
 
 - **`.` (root)** — mesin domain Node murni (`domain/`): `apps/api` cukup memanggil `authService`; HTTP-nya tetap di api.
-- **`/next`** — integrasi Next.js (`next/`): `AuthProvider`/`useAuth` (client), server actions + guards (server), dan konstanta cookie — dikonsumsi `apps/web` & `apps/admin`. **Tidak ada route handler `/api/auth/*` per-app**; semua aksi memanggil domain langsung.
+- **`/next`** — integrasi Next.js (`next/`): `AuthProvider`/`useAuth` (client), server actions + guards (server), gateway OAuth Google (`next/oauth`), dan konstanta cookie — dikonsumsi `apps/web` & `apps/admin`. **Tidak ada route handler `/api/auth/*` per-app**; semua aksi memanggil domain langsung — _kecuali_ `/api/auth/google/*` di `apps/web` (lihat "Login dengan Google").
 
 ```
 register/login  ─┐
@@ -56,10 +56,11 @@ Subpath untuk `apps/web` & `apps/admin` — **source export** (`src/next/*.ts`),
 | `@packages/auth/next`        | `AuthProvider`, `useAuth`, `authErrorMessage`                                                                | root layout, halaman auth (client) |
 | `@packages/auth/next/server` | `getSessionUser`, `requireAuth`, `requireAdmin`, `loginAction`, `registerAction`, `logoutAction`, `meAction` | `(protected)/layout`, `app/layout` |
 | `@packages/auth/next/cookie` | `SESSION_COOKIE` (`tj_token`) — tanpa `next/headers`                                                         | `proxy.ts` (edge)                  |
+| `@packages/auth/next/oauth`  | `beginGoogleOAuth`, `completeGoogleOAuth` (gateway OAuth Google)                                             | route handler `/api/auth/google*`  |
 
 ### Server actions, bukan route handler
 
-Auth dijalankan lewat **Server Actions** (`'use server'`) yang ada di package ini — aplikasi Next **tidak mendefinisikan API apa pun**:
+Auth dijalankan lewat **Server Actions** (`'use server'`) yang ada di package ini — aplikasi Next **tidak mendefinisikan API apa pun** (satu pengecualian: `/api/auth/google/*`, lihat "Login dengan Google"):
 
 | Action           | Peran                                                                   |
 | ---------------- | ----------------------------------------------------------------------- |
@@ -89,13 +90,74 @@ Desain: token hanya hidup di **cookie httpOnly** (tak pernah menyentuh JS) — `
 
 Error domain memakai `AuthError` dengan `code` dari `API_ERROR_CODES` (`@packages/validators`):
 
-| Code                  | Status | Kapan                                    |
-| --------------------- | ------ | ---------------------------------------- |
-| `EMAIL_TAKEN`         | 409    | email sudah terdaftar (+race P2002)      |
-| `INVALID_CREDENTIALS` | 401    | email salah / password salah / non-aktif |
-| `UNAUTHORIZED`        | 401    | token rusak/kedaluwarsa/sesi hilang      |
+| Code                     | Status | Kapan                                               |
+| ------------------------ | ------ | --------------------------------------------------- |
+| `EMAIL_TAKEN`            | 409    | email sudah terdaftar (+race P2002)                 |
+| `INVALID_CREDENTIALS`    | 401    | email salah / password salah / non-aktif            |
+| `UNAUTHORIZED`           | 401    | token rusak/kedaluwarsa/sesi hilang                 |
+| `OAUTH_ACCOUNT_LINKED`   | 409    | `(provider, providerId)` sudah tertaut ke akun lain |
+| `OAUTH_EMAIL_UNVERIFIED` | 400    | `email_verified` di ID token Google false           |
 
 `AuthError` diterjemahkan exception filter `apps/api` (`AllExceptionsFilter`) ke envelope `{ error: { status, code, message } }` — kode error SSOT sampai ke `ApiHttpError` di `@packages/client`.
+
+## Login dengan Google (OAuth)
+
+Login/register lewat akun Gmail (hanya **`apps/web`** — admin sengaja tidak, karena akun Google selalu `role: USER` dan panel admin butuh `role: ADMIN`). Logika ada di `next/oauth.ts` + `authService.oauthLogin` (find-or-create + **link otomatis**); aplikasi hanya punya 2 route handler tipis:
+
+```
+Tombol "Continue with Google"
+  → GET /api/auth/google            (beginGoogleOAuth: set cookie state, redirect ke consent screen Google)
+  → Google consent screen
+  → GET /api/auth/google/callback   (completeGoogleOAuth: validasi state, tukar kode, verifikasi ID token,
+                                      authService.oauthLogin → set cookie sesi tj_token)
+  → redirect /home (atau ?error=… bila gagal)
+```
+
+Kenapa route handler? OAuth2 butuh `redirect_uri` GET yang terdaftar di Google Console — server action tidak punya endpoint GET. Ini **satu-satunya pengecualian** aturan "tanpa route `/api/auth/*`"; semua logika tetap di package ini.
+
+Perilaku akun:
+
+- Email **baru** → akun dibuat (`password: null`, `role: USER`) + baris `OAuthAccount(provider, providerId)` unik.
+- Email **sudah ada** (akun password) → otomatis **di-link**; kedua cara login (password & Google) tetap bisa dipakai paralel.
+- `(provider, providerId)` sudah tertaut ke akun lain → `OAUTH_ACCOUNT_LINKED`.
+- `email_verified: false` di ID token → `OAUTH_EMAIL_UNVERIFIED`.
+
+### Setup: dapatkan `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`
+
+Kedua variabel dibaca dari **root `.env`** (SSOT `@packages/environment`; jangan commit — `.env` sudah gitignored). Langkah lengkap di [Google Cloud Console](https://console.cloud.google.com/):
+
+1. **Buat project** — di console, klik project picker (header) → **NEW PROJECT** → nama bebas (mis. `jajanah`) → **CREATE** → tunggu jadi project aktif.
+2. **OAuth consent screen** — menu **APIs & Services → OAuth consent screen**:
+   - User Type: **External** → **CREATE**.
+   - _App information_: App name (mis. `jajanah`), _User support email_: pilih email Anda → **SAVE AND CONTINUE**.
+   - _Scopes_: **ADD OR REMOVE SCOPES** → cari & pilih `openid`, `email`, `profile` (cukup 3 ini) → **UPDATE** → **SAVE AND CONTINUE**.
+   - _Test users_: **ADD USERS** → masukkan **email Gmail Anda** (selama status _Testing_, hanya email di daftar ini yang boleh login) → **SAVE AND CONTINUE**.
+   - _Summary_ → **BACK TO DASHBOARD**.
+3. **OAuth client ID** — menu **APIs & Services → Credentials → CREATE CREDENTIALS → OAuth client ID**:
+   - _Application type_: **Web application**.
+   - _Name_: bebas (mis. `jajanah-web`).
+   - _Authorized redirect URIs_ → **ADD URI**, isi **persis** (skema/host/port/path):
+     - dev: `http://localhost:3000/api/auth/google/callback`
+     - prod (bila deploy): `https://<domain-anda>/api/auth/google/callback`
+   - **CREATE** → dialog menampilkan **Client ID** dan **Client Secret** → salin.
+4. **Isi `.env`** di root repo:
+
+   ```bash
+   GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxx
+   ```
+
+   (baris komentar sudah tersedia di `.env.example` — salin ke `.env` lalu isi nilainya)
+
+5. **Restart dev server** (buka ulang folder → auto-task, atau `pnpm dev`) → buka `http://localhost:3000/auth/login` → klik **Continue with Google**.
+
+Troubleshooting & catatan:
+
+- **`redirect_uri_mismatch`** di Google → URI yang dibaca Google tidak persis sama dengan di langkah 3 (harus sama termasuk `http`/`https`, port, tanpa trailing slash).
+- **`access_blocked` / "app belum diverifikasi"** → user bukan _test user_. Tambahkan di langkah 2, atau klik **Publish app** di OAuth consent screen (scope `email`/`profile` biasanya lolos verifikasi otomatis).
+- **Tambah user lain tanpa publish** → tambahkan emailnya ke _Test users_.
+- Kredensial kosong → halaman login menampilkan pesan `oauth_config` ("Login Google belum dikonfigurasi di server").
+- Callback gagal (state kedaluwarsa, kode ditolak Google, dsb) → redirect ke `/auth/login?error=oauth` (+ pesan sesuai kode error).
 
 ## Desain & alasan
 
@@ -107,10 +169,12 @@ Error domain memakai `AuthError` dengan `code` dari `API_ERROR_CODES` (`@package
 
 ## Environment
 
-| Variabel                 | Default   | Deskripsi                                                                              |
-| ------------------------ | --------- | -------------------------------------------------------------------------------------- |
-| `JWT_SECRET`             | — (wajib) | Tanda tangan JWT HS256. Buat: `openssl rand -base64 48`. Hanya di `.env` (gitignored). |
-| `AUTH_SESSION_TTL_HOURS` | `168`     | Umur sesi (jam). Tidak valid → fallback default.                                       |
+| Variabel                 | Default   | Deskripsi                                                                                |
+| ------------------------ | --------- | ---------------------------------------------------------------------------------------- |
+| `JWT_SECRET`             | — (wajib) | Tanda tangan JWT HS256. Buat: `openssl rand -base64 48`. Hanya di `.env` (gitignored).   |
+| `AUTH_SESSION_TTL_HOURS` | `168`     | Umur sesi (jam). Tidak valid → fallback default.                                         |
+| `GOOGLE_CLIENT_ID`       | —         | OAuth client ID Google (Web application). Kosong → `oauth_config` (hanya apps/web).      |
+| `GOOGLE_CLIENT_SECRET`   | —         | OAuth client secret Google. Isi di root `.env` — panduan: "Login dengan Google (OAuth)". |
 
 Nilai env dibaca via `@packages/environment` (root `.env*`, SSOT).
 
@@ -118,14 +182,14 @@ Nilai env dibaca via `@packages/environment` (root `.env*`, SSOT).
 
 ```
 packages/auth/
-├── package.json          # exports: ".", "./next", "./next/server", "./next/cookie"
+├── package.json          # exports: ".", "./next", "./next/server", "./next/cookie", "./next/oauth"
 ├── tsconfig.json         # extends node.json; + jsx react-jsx, lib DOM, include .tsx
 ├── tsconfig.build.json   # emit CJS + d.ts → dist/ (spec & src/next/** di-exclude)
 ├── eslint.config.mjs     # re-export @configs/eslint/react
 └── src/
     ├── index.ts              # aggregator publik root: re-export dari domain/
     ├── domain/               # mesin auth (Node + Prisma)
-    │   ├── auth.service.ts   # register / login / logout / authenticate
+    │   ├── auth.service.ts   # register / login / logout / authenticate / oauthLogin
     │   ├── password.ts       # hashPassword / verifyPassword (scrypt)
     │   ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256)
     │   ├── errors.ts         # AuthError { code, status }
@@ -136,6 +200,7 @@ packages/auth/
         ├── auth-provider.tsx # 'use client' — context + panggil server actions
         ├── cookie.ts         # SESSION_COOKIE (entry edge-safe)
         ├── errors.ts         # AuthActionError + authErrorMessage
+        ├── oauth.ts          # beginGoogleOAuth / completeGoogleOAuth (state + Google OAuth2)
         └── server/           # guards, server actions, opsi kuki (+ spec)
             ├── actions.ts    # 'use server' — login/register/logout/me (ke domain langsung)
             ├── action-types.ts # tipe hasil JSON { ok, ... }
