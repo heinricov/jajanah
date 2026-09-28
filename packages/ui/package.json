@@ -10,6 +10,7 @@
     "./lib/*": "./src/lib/*.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./auth/*": "./src/auth/index.ts",
+    "./navigations/*": "./src/navigations/index.ts",
     "./dashboard/*": "./src/dashboard/*.tsx",
     "./apps/*": "./src/apps/*.tsx"
   },

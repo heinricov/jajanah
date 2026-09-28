@@ -102,7 +102,7 @@ Tidak ada `.prettierrc` di root maupun workspace. Root `package.json` menunjuk l
 
 ## UI package (shadcn/ui)
 
-`packages/ui` (`@packages/ui`) berisi komponen [shadcn/ui](https://ui.shadcn.com) dengan Tailwind CSS v4 — Radix basis, preset Nova, base color neutral, ikon lucide. Konfigurasi paket ini memakai preset dari `configs/` (`@configs/typescript/react.json` + `@configs/eslint/react`), CSS theme hidup di `packages/ui/src/styles/globals.css`, dan `postcss.config.mjs` di-reexport oleh app (SSOT).
+`packages/ui` (`@packages/ui`) berisi komponen [shadcn/ui](https://ui.shadcn.com) dengan Tailwind CSS v4 — Radix basis, preset **Mira** (`radix-mira`), base color **mist**, theme **sky**, font **Oxanium** (preset shadcn `b5KJfbheS`), ikon lucide. Konfigurasi paket ini memakai preset dari `configs/` (`@configs/typescript/react.json` + `@configs/eslint/react`), CSS theme hidup di `packages/ui/src/styles/globals.css`, dan `postcss.config.mjs` di-reexport oleh app (SSOT).
 
 ```bash
 # tambah komponen

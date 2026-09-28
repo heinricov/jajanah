@@ -14,6 +14,7 @@ packages/ui/
 └── src/
     ├── components/        # Komponen shadcn (button, card, input, badge, …)
     ├── auth/              # Form & shell auth (form-login, form-register, auth-card, user-auth)
+    ├── navigations/       # Navbar & Footer (server component, props-driven; dipanggil di layout app)
     ├── dashboard/         # Layout dashboard (app-layout, app-sidebar, nav-*, team-switcher)
     ├── apps/              # Logo aplikasi (app-logo)
     ├── lib/utils.ts       # export { cn } from "cn"
@@ -66,7 +67,10 @@ pnpm --filter web add @packages/ui --workspace:*
    ```tsx
    import { Button } from '@packages/ui/components/button';
    import { Card, CardContent } from '@packages/ui/components/card';
+   import { Navbar, Footer } from '@packages/ui/navigations/';
    ```
+
+   `Navbar`/`Footer` adalah server component props-driven (`user`, `items`, `showAuth`, `copyright`) — contoh pemakaian ada di `apps/web/app/layout.tsx`.
 
 2. **CSS** — import sekali di `app/layout.tsx` (satu-satunya sumber theme):
 

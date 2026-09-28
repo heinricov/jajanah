@@ -30,7 +30,7 @@ apps/web/
 ├── components/
 │   └── health-status.tsx  # demo: apiClient.getHealth() (@packages/client) → status API
 └── app/
-    ├── layout.tsx      # import @packages/ui/globals.css + bootstrap <AuthProvider initialUser={await getSessionUser()}>
+    ├── layout.tsx      # globals.css + font Oxanium + <AuthProvider initialUser={await getSessionUser()}> + Navbar/Footer (@packages/ui/navigations)
     ├── page.tsx        # landing publik
     ├── auth/           # login / register / forgot-password (client pages, via useAuth())
     └── (protected)/

@@ -31,7 +31,7 @@ apps/admin/
 │   └── auth-dashboard-layout.tsx  # shell dashboard + user menu (useAuth → logout)
 └── app/
     ├── layout.tsx      # import @packages/ui/globals.css + bootstrap <AuthProvider initialUser={await getSessionUser()}>
-    ├── page.tsx        # landing → tautan login admin
+    ├── page.tsx        # redirect server-side ke /dashboard (guard login ada di (protected)/layout)
     ├── auth/           # login / forgot-password (client pages, via useAuth(); tanpa register)
     └── (protected)/
         ├── layout.tsx  # requireAdmin() — verifikasi token + role ADMIN, redirect bila bukan admin
