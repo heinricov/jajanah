@@ -14,7 +14,7 @@ packages/ui/
 └── src/
     ├── components/        # Komponen shadcn (button, card, input, badge, …)
     ├── auth/              # Form auth (form-login/register/forgot-password/new-password, auth-card, password-input, social-buttons, user-auth) — logo AppLogo di tengah layar
-    ├── navigations/       # Navbar & Footer (server component, props-driven; dipanggil di layout app)
+    ├── navigations/       # Navbar & Footer (props-driven; Navbar punya menu logout via UserAuth; dipanggil di layout app)
     ├── dashboard/         # Layout dashboard (app-layout, app-sidebar, nav-*, team-switcher)
     ├── apps/              # Logo aplikasi (app-logo)
     ├── lib/utils.ts       # export { cn } from "cn"
@@ -70,7 +70,7 @@ pnpm --filter web add @packages/ui --workspace:*
    import { Navbar, Footer } from '@packages/ui/navigations/';
    ```
 
-   `Navbar`/`Footer` adalah server component props-driven (`user`, `items`, `showAuth`, `copyright`) — contoh pemakaian ada di `apps/web/app/layout.tsx`.
+   `Navbar`/`Footer` props-driven (`user`, `items`, `showAuth`, `onLogout`, `copyright`). Saat user login, kanan `Navbar` menampilkan menu avatar (`UserAuth`) berisi **Logout** — karena handler tak boleh datang dari server component, `onLogout` dipasok wrapper client: contoh di `apps/web/components/site-navbar.tsx` (`useAuth().logout` + redirect beranda), dipakai `apps/web/app/layout.tsx`.
 
 2. **CSS** — import sekali di `app/layout.tsx` (satu-satunya sumber theme):
 

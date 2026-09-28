@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import '@packages/ui/globals.css';
 import { AuthProvider } from '@packages/auth/next';
 import { getSessionUser } from '@packages/auth/next/server';
-import { Footer, Navbar } from '@packages/ui/navigations/';
+import { Footer } from '@packages/ui/navigations/';
+import { SiteNavbar } from '../components/site-navbar';
 import { Oxanium } from 'next/font/google';
 import { cn } from '@packages/ui/lib/utils';
 
@@ -21,7 +22,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="id" className={cn('font-sans', oxanium.variable)}>
       <body className="flex min-h-dvh flex-col">
         <AuthProvider initialUser={user}>
-          <Navbar user={user} />
+          <SiteNavbar />
           <div className="flex flex-1 flex-col">{children}</div>
           <Footer />
         </AuthProvider>

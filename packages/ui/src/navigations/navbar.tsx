@@ -1,6 +1,7 @@
 import { Button } from '@packages/ui/components/button';
 import { cn } from '@packages/ui/lib/utils';
 import { AppLogo } from '../apps/app-logo';
+import { UserAuth } from '../auth/user-auth';
 
 export type NavbarItem = {
   href: string;
@@ -15,24 +16,20 @@ export type NavbarProps = {
   user?: NavbarUser | null;
   items?: NavbarItem[];
   showAuth?: boolean;
+  /** Buka menu avatar → Logout (dipasok dari client, mis. `useAuth().logout`). */
+  onLogout?: () => void;
   className?: string;
 };
 
 const DEFAULT_ITEMS: NavbarItem[] = [{ href: '/', label: 'Beranda' }];
 
-function initialsOf(name?: string | null): string {
-  return (
-    name
-      ?.trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part.charAt(0))
-      .join('')
-      .toUpperCase() || '?'
-  );
-}
-
-export function Navbar({ user, items = DEFAULT_ITEMS, showAuth = true, className }: NavbarProps) {
+export function Navbar({
+  user,
+  items = DEFAULT_ITEMS,
+  showAuth = true,
+  onLogout,
+  className,
+}: NavbarProps) {
   return (
     <header
       className={cn(
@@ -59,12 +56,11 @@ export function Navbar({ user, items = DEFAULT_ITEMS, showAuth = true, className
 
         {showAuth ? (
           user ? (
-            <span className="flex max-w-48 items-center gap-2 rounded-full border border-border py-1 pr-3 pl-1">
-              <span className="flex size-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-                {initialsOf(user.name)}
-              </span>
-              <span className="truncate text-sm">{user.name ?? 'Akun'}</span>
-            </span>
+            <UserAuth
+              user={{ name: user.name ?? undefined }}
+              menuLabel={user.name ?? 'Akun'}
+              onLogout={onLogout}
+            />
           ) : (
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" asChild>
