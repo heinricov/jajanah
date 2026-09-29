@@ -13,7 +13,7 @@ dependensi berubah.
 | `packages/db` | `@packages/db` | CJS | `prisma generate && tsc` | — | `@packages/environment` |
 | `packages/email` | `@packages/email` | CJS | tsc | ✅ 1/8 | **nol dependency runtime** |
 | `packages/client` | `@packages/client` | CJS (preset browser) | tsc | ✅ 1/13 | `@packages/validators` |
-| `packages/auth` | `@packages/auth` | CJS + raw source `/next**` | tsc (exclude `src/next/**`) | ✅ 7/103 | db, email, environment, validators + `google-auth-library` |
+| `packages/auth` | `@packages/auth` | CJS + raw source `/next**` | tsc (exclude `src/next/**`) | ✅ 8/116 | db, email, environment, validators + `google-auth-library` |
 | `packages/ui` | `@packages/ui` | **ESM source** (`type: module`, tanpa build) | — | — | **nol workspace dep** (radix/base-ui/tailwind/zod/dll) |
 | `configs/*` | `@configs/{eslint,next,prettier,typescript}` | ESM | — | — | `@configs/next` → `@packages/environment` |
 | `apps/api` | `api` | **CJS** (builder `nest build` = `tsc`) | nest build | ✅ 5/20 | auth, environment, logger, validators |
@@ -46,6 +46,11 @@ PAGINATION_DEFAULTS = { page: 1, limit: 20 }
 **Jebakan**: konsumen memuat package ini dari **`dist/`** (CJS) — setelah menambah
 export bernilai (schema/const), jalankan `pnpm --filter @packages/validators build`,
 kalau tidak runtime dapat `undefined` (type-only import tidak menangkap ini).
+
+**Foto profil**: `authUserSchema.image` adalah `string | null` (wajib ada, bedakan "tanpa
+foto" dari "belum diketahui"), divalidasi `imageUrlSchema` (`z.url().max(2048)` + refine
+regex `^https?://`). Regex, **bukan** `new URL()`: tsconfig package ini `types: []`
+(tanpa node globals) dan `new URL()` menerima `javascript:`/`data:`.
 
 ### Prosedur menambah kontrak baru (dari README validators)
 
@@ -120,7 +125,8 @@ pnpm --filter @packages/db studio
 
 - Migrasi = folder `prisma/migrations/<timestamp>_<nama>/migration.sql`, timestamp dibuat
   otomatis Prisma. Sudah ada: `20260926112330_auth`, `20260928064048`,
-  `20260928101815_email_verification`, `20260929033248_password_reset`.
+  `20260928101815_email_verification`, `20260929033248_password_reset`,
+  `20260929062723_auth_image` (`image` di `Auth` + `OAuthAccount`).
   **Gotcha**: `prisma migrate dev` bisa hang menunggu stdin bila dijalankan non-interaktif
   — pakai `< /dev/null` dan pastikan `prisma generate` ikut jalan (client lama = model
   baru tak terlihat typecheck).

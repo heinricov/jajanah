@@ -79,6 +79,62 @@ function callbackUrl(requestUrl: string): string {
   return new URL(GOOGLE_OAUTH_CALLBACK_PATH, requestUrl).toString();
 }
 
+const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
+
+/** Bentuk minimal `fetch` untuk userinfo (pola sama dengan `FetchLike` @packages/email). */
+export type PictureFetchLike = (
+  input: string,
+  init?: { headers?: Record<string, string> },
+) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+
+export type PictureDeps = {
+  /** Inject `fetch` untuk test (default: `fetch` global). */
+  fetchImpl?: PictureFetchLike;
+};
+
+/**
+ * URL foto profil Google → dipakai `oauthLogin` untuk `Auth.image` +
+ * `OAuthAccount.image`.
+ *
+ * Urutan: claim `picture` di ID token (tanpa request tambahan) → bila kosong,
+ * panggil endpoint userinfo memakai `access_token` yang sudah dipegang. Klaim
+ * itu menurut dokumen Google hanya "**might** be provided" dan bisa hilang
+ * sama sekali untuk sebagian akun (googleapis/google-auth-library-nodejs#822),
+ * makanya butuh fallback.
+ *
+ * Tidak pernah melempar — foto bukan alasan login gagal:
+ * - `string`  → ada foto, simpan;
+ * - `null`    → penyedia memastikan tidak ada foto → kolom dikosongkan;
+ * - `undefined` → tidak bisa dipastikan (http non-2xx, JSON rusak, jaringan) →
+ *   `oauthLogin` membiarkan nilai lama, avatar tidak ikut hilang.
+ */
+export async function resolveGooglePicture(
+  accessToken: string | null | undefined,
+  idTokenPicture: string | null | undefined,
+  deps: PictureDeps = {},
+): Promise<string | null | undefined> {
+  if (idTokenPicture) return idTokenPicture;
+  if (!accessToken) return undefined;
+
+  try {
+    const fetchImpl: PictureFetchLike = deps.fetchImpl ?? (globalThis.fetch as PictureFetchLike);
+    const response = await fetchImpl(GOOGLE_USERINFO_URL, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return undefined;
+
+    const payload = await response.json();
+    const picture =
+      typeof payload === 'object' && payload !== null
+        ? (payload as { picture?: unknown }).picture
+        : undefined;
+    if (picture === null || picture === undefined) return null;
+    return typeof picture === 'string' ? picture : null;
+  } catch {
+    return undefined;
+  }
+}
+
 function toFailure(error: unknown): { ok: false; error: GoogleOAuthError; log?: string } {
   if (error instanceof OAuthConfigError) return { ok: false, error: 'oauth_config' };
   if (error instanceof AuthError) {
@@ -181,6 +237,7 @@ export async function completeGoogleOAuth(
       email: payload.email,
       name: payload.name ?? '',
       emailVerified: payload.email_verified === true,
+      image: await resolveGooglePicture(tokens.access_token, payload.picture),
     });
     await setSessionCookie(session.token, session.expiresAt);
 

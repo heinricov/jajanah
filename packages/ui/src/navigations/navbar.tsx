@@ -10,6 +10,8 @@ export type NavbarItem = {
 
 export type NavbarUser = {
   name?: string | null;
+  /** Foto profil (OAuth) — null/kosong → `UserAuth` menampilkan inisial. */
+  image?: string | null;
 };
 
 export type NavbarProps = {
@@ -57,7 +59,7 @@ export function Navbar({
         {showAuth ? (
           user ? (
             <UserAuth
-              user={{ name: user.name ?? undefined }}
+              user={{ name: user.name ?? undefined, image: user.image ?? undefined }}
               menuLabel={user.name ?? 'Akun'}
               onLogout={onLogout}
             />

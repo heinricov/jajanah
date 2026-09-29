@@ -28,7 +28,8 @@ import {
 export type NavUserUser = {
   name: string;
   email: string;
-  avatar?: string;
+  /** Foto profil (OAuth) — null/kosong → tampilkan inisial. */
+  avatar?: string | null;
 };
 
 function initialsOf(name: string): string {

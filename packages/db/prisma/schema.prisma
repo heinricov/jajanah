@@ -21,6 +21,12 @@ model Auth {
   lastLoginAt     DateTime?
   isActive        Boolean   @default(true)
   /**
+   * URL foto profil yang DITAMPILKAN (ditalin dari OAuthAccount saat login
+   * terakhir; akun email+password → null → UI pakai inisial). Sumber aslinya
+   * ada di `OAuthAccount.image` — kolom ini hanya untuk baca tanpa join.
+   */
+  image           String?
+  /**
    * Konfirmasi email pertama — null = belum diverifikasi (blokir login).
    */
   emailVerifiedAt DateTime?
@@ -39,6 +45,11 @@ model OAuthAccount {
   providerId String
   email      String
   authId     String   @db.Uuid
+  /**
+   * URL foto yang dikembalikan penyedia (Google `picture`) — sumber kebenaran
+   * per penyedia. Disalin ke `Auth.image` agar tampilan tidak butuh join.
+   */
+  image      String?
   createdAt  DateTime @default(now())
 
   auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)

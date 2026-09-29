@@ -174,7 +174,7 @@ Tombol "Continue with Google"
   → GET /api/auth/google            (beginGoogleOAuth: set cookie state, redirect ke consent screen Google)
   → Google consent screen
   → GET /api/auth/google/callback   (completeGoogleOAuth: validasi state, tukar kode, verifikasi ID token,
-                                      authService.oauthLogin → set cookie sesi tj_token)
+                                      resolveGooglePicture → foto profil, authService.oauthLogin → set cookie sesi tj_token)
   → redirect /home (atau ?error=… bila gagal)
 ```
 
@@ -186,6 +186,7 @@ Perilaku akun:
 - Email **sudah ada** (akun password) → otomatis **di-link**; kedua cara login (password & Google) tetap bisa dipakai paralel.
 - `(provider, providerId)` sudah tertaut ke akun lain → `OAUTH_ACCOUNT_LINKED`.
 - `email_verified: false` di ID token → `OAUTH_EMAIL_UNVERIFIED`.
+- **Foto profil** diambil dari claim `picture` ID token; bila kosong, GET ke endpoint userinfo memakai `access_token` yang sudah dipegang (`resolveGooglePicture`). Hasilnya disimpan ke `OAuthAccount.image` **dan** `Auth.image` — `Auth.image` inilah yang dirender `UserAuth` (navbar) & `NavUser` (sidebar admin).
 
 ### Setup: dapatkan `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`
 
@@ -230,6 +231,7 @@ Troubleshooting & catatan:
 - **JWT HS256 diimplementasikan sendiri** dengan `node:crypto` (bukan `jose` — lib itu ESM-only, bentrok dengan build CJS + jest repo ini). Verifikasi **tidak pernah mendispatch berdasar header `alg`** (selalu hitung ulang HMAC) → bebas algorithm-confusion; signature dibanding `timingSafeEqual`.
 - **`JWT_SECRET` dibaca lazily** dari env (bukan di module-load) — unit test bisa mengaturnya & aplikasi gagal jelas saat secret kosong.
 - **Password tidak pernah ikut response**: mapping Prisma → `AuthUser` hanya memilih field aman, lalu di-`parse` `authUserSchema` (SSOT).
+- **Avatar disimpan di dua kolom**: `OAuthAccount.image` (foto menurut penyedia itu — sumber kebenaran per penyedia) dan `Auth.image` (foto yang dipakai aplikasi). `oauthLogin` selalu menimpa `Auth.image` dengan foto terbaru. Tiga nilai berbeda: `string` = simpan, `null` = "penyedia memastikan tanpa foto" → kosongkan, `undefined` = gagal dipastikan (foto gagal diambil, URL tidak valid) → **nilai lama dibiarkan**. Alasan kegagalan jaringan tidak boleh menghapus avatar, dan login tidak pernah gagal hanya karena foto.
 - Logging sengaja **tidak** di package ini — log HTTP (request completed + error dari filter) sudah membawa `requestId`/`userId` via ALS `@packages/logger`.
 
 ## Environment

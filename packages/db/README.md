@@ -50,15 +50,22 @@ Menambahkan dependency workspace di app:
 
 ## Model
 
-| Model                    | Field                                                                                                                                                                                                                                                                 |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Auth`                   | `id` (uuid) · `name` · `email` (unique) · `password?` · `role` (`Role` enum, default `USER`) · `lastLoginAt?` · `isActive` · `emailVerifiedAt?` · `createdAt` · `updatedAt` — relasi `sessions` · `oAuthAccounts` · `emailVerificationTokens` · `passwordResetTokens` |
-| `Session`                | `id` (uuid) · `authId` (uuid, FK → `Auth`, cascade delete) · `token` (unique — menyimpan `jti` JWT) · `expiresAt` · `authAgent?` · `ipAddress?` · `createdAt`                                                                                                         |
-| `OAuthAccount`           | `id` (uuid) · `provider` · `providerId` · `email` · `authId` (FK, cascade) · `createdAt` — `@@unique([provider, providerId])` (find-or-create Google)                                                                                                                 |
-| `EmailVerificationToken` | `id` (uuid) · `authId` (FK, cascade) · `token` (unique, one-time) · `expiresAt` · `createdAt` — tautan konfirmasi registrasi                                                                                                                                          |
-| `PasswordResetToken`     | `id` (uuid) · `authId` (FK, cascade) · `token` (unique, one-time) · `expiresAt` · `createdAt` — tautan reset password                                                                                                                                                 |
+| Model                    | Field                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Auth`                   | `id` (uuid) · `name` · `email` (unique) · `image?` (URL foto profil — **kolom yang ditampilkan**, diisi dari OAuth) · `password?` · `role` (`Role` enum, default `USER`) · `lastLoginAt?` · `isActive` · `emailVerifiedAt?` · `createdAt` · `updatedAt` — relasi `sessions` · `oAuthAccounts` · `emailVerificationTokens` · `passwordResetTokens` |
+| `Session`                | `id` (uuid) · `authId` (uuid, FK → `Auth`, cascade delete) · `token` (unique — menyimpan `jti` JWT) · `expiresAt` · `authAgent?` · `ipAddress?` · `createdAt`                                                                                                                                                                                     |
+| `OAuthAccount`           | `id` (uuid) · `provider` · `providerId` · `email` · `image?` (foto dari penyedia ini — **sumber kebenaran per penyedia**) · `authId` (FK, cascade) · `createdAt` — `@@unique([provider, providerId])` (find-or-create Google)                                                                                                                     |
+| `EmailVerificationToken` | `id` (uuid) · `authId` (FK, cascade) · `token` (unique, one-time) · `expiresAt` · `createdAt` — tautan konfirmasi registrasi                                                                                                                                                                                                                      |
+| `PasswordResetToken`     | `id` (uuid) · `authId` (FK, cascade) · `token` (unique, one-time) · `expiresAt` · `createdAt` — tautan reset password                                                                                                                                                                                                                             |
 
 `enum Role { USER ADMIN }` — nilai tipe di-SSOT-kan dengan `Role` di `@packages/validators` (interface `AuthUser`). Logika di atas model ini hidup di [`@packages/auth`](../auth/README.md).
+
+Foto profil OAuth disimpan di **dua kolom dengan pembagian peran berbeda**:
+
+- `OAuthAccount.image` — foto menurut penyedia (mis. Google) untuk `(provider, providerId)` itu. Bila ada lebih dari satu penyedia, tiap penyedia menjaga foto miliknya sendiri.
+- `Auth.image` — foto yang **dipakai aplikasi** (navbar web & sidebar admin). Diisi ulang oleh `authService.oauthLogin` setiap kali login OAuth.
+
+Keduanya dijaga sinkron oleh `oauthLogin`: foto terbaru menimpa nilai lama, `null` berarti "penyedia memastikan tidak ada foto" (kolom dikosongkan), dan `undefined` (foto gagal diambil / URL tidak valid) berarti **tidak menyentuh nilai lama**. Validasi URL ada di `imageUrlSchema` (`@packages/validators`) dan diterapkan lagi di `sanitizeImageUrl` sebelum menyimpan.
 
 ## Menambah model
 

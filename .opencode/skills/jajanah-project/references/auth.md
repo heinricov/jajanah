@@ -23,7 +23,7 @@ Sumber kebenaran: `packages/auth/src/**`. Pembaruan di sini wajib bila `package.
 | `./next/server` | raw source | 7 action + tipe hasil + `getSessionUser`/`requireAuth`/`requireAdmin` + cookie helpers |
 | `./next/server/actions` | raw source (`'use server'`) | **hanya 7 server action** — inilah yang aman dari client component |
 | `./next/cookie` | raw source | `SESSION_COOKIE` saja (zero import, edge-safe) |
-| `./next/oauth` | raw source | `beginGoogleOAuth`, `completeGoogleOAuth`, `GOOGLE_OAUTH_STATE_COOKIE`, tipe error |
+| `./next/oauth` | raw source | `beginGoogleOAuth`, `completeGoogleOAuth`, `resolveGooglePicture`, `GOOGLE_OAUTH_STATE_COOKIE`, tipe error |
 
 **Subpath `./next**` sengaja tidak masuk `dist/`** (ada di `exclude` `tsconfig.build.json`)
 karena `require('next/headers')` dari CJS hasil build kehilangan binding saat di-bundle
@@ -56,14 +56,15 @@ export {
 ## 3. Metode domain (`src/domain/auth.service.ts`)
 
 Semua tanggal dikirim ke client sebagai ISO string; user dihasilkan **hanya** lewat
-`toAuthUser()` (allowlist field, `emailVerified: Boolean(row.emailVerifiedAt)`, hasil akhir
-di-`parse` dengan `authUserSchema` → **`ZodError`, bukan `AuthError`, bila row tidak valid**).
+`toAuthUser()` (allowlist field, `emailVerified: Boolean(row.emailVerifiedAt)`, `image` di-sanitize
+via `sanitizeImageUrl`, hasil akhir di-`parse` dengan `authUserSchema` → **`ZodError`, bukan
+`AuthError`, bila row tidak valid**).
 
 | Method | Signature | Behavior / error |
 | --- | --- | --- |
 | `register` | `(input: RegisterRequest) => Promise<AuthUser>` | trim nama, `normalizeEmail`, cek unique → `EMAIL_TAKEN` (409, dua jalur: pre-check & kode `P2002`), role hard-code `'USER'`, **`emailVerifiedAt` tetap null, tidak ada sesi** |
 | `login` | `(input: LoginRequest, context: LoginContext = {}) => Promise<LoginResponse>` | scrypt **selalu jalan** (dummy hash bila email tak dikenal → anti timing-oracle) → `!user \|\| !passwordOk \|\| !isActive` = `INVALID_CREDENTIALS` (401, tak bisa dibedakan) → belum terverifikasi = `EMAIL_NOT_VERIFIED` (403) → `createSession` |
-| `oauthLogin` | `(input: OAuthLoginInput, context?: LoginContext) => Promise<LoginResponse>` | tolak `emailVerified: false` → `OAUTH_EMAIL_UNVERIFIED` (400). Cabang: (1) identity sudah ter-link → langsung masuk tanpa cek email; (2) email sudah punya akun → auto-link, `P2002` = `OAUTH_ACCOUNT_LINKED` (409); (3) email baru → buat akun `password: null` + `emailVerifiedAt: now()`; `P2002` saat create → retry sekali lalu `EMAIL_TAKEN`. Nonaktif → `UNAUTHORIZED` (401). Akun lama tanpa verifikasi → **di-backfill `emailVerifiedAt`** |
+| `oauthLogin` | `(input: OAuthLoginInput, context?: LoginContext) => Promise<LoginResponse>` | tolak `emailVerified: false` → `OAUTH_EMAIL_UNVERIFIED` (400). Cabang: (1) identity sudah ter-link → langsung masuk tanpa cek email; (2) email sudah punya akun → auto-link, `P2002` = `OAUTH_ACCOUNT_LINKED` (409); (3) email baru → buat akun `password: null` + `emailVerifiedAt: now()`; `P2002` saat create → retry sekali lalu `EMAIL_TAKEN`. Nonaktif → `UNAUTHORIZED` (401). Akun lama tanpa verifikasi → **di-backfill `emailVerifiedAt`**. Sinkron foto profil → tulis `OAuthAccount.image` **dan** `Auth.image` dengan `input.image` (`string` = simpan, `null` = kosongkan, `undefined` = jangan disentuh; URL non-http(s) jadi `undefined` lewat `sanitizeImageUrl`) |
 | `requestEmailVerification` | `(email: string) => Promise<{token,name,email} \| null>` | `null` bila email tak dikenal **atau** sudah terverifikasi (**anti-enumerasi — treat sebagai sukses**). `deleteMany` token lama → `randomBytes(32).toString('base64url')` (43 char) → TTL `getVerifyTtlHours()` |
 | `verifyEmail` | `(token: string) => Promise<AuthUser>` | tak dikenal / kedaluwarsa (`expiresAt <= now`, inclusif) → `INVALID_VERIFY_TOKEN` (400). Hapus **semua** token user → set `emailVerifiedAt`. **Tidak membuat sesi/cookie** |
 | `requestPasswordReset` | `(email: string) => Promise<{token,name,email} \| null>` | `null` bila email tak dikenal **atau** `!isActive` (**anti-enumerasi — treat sebagai sukses**). `deleteMany` token lama → `randomBytes(32)` base64url → TTL `getResetTtlHours()`. Akun OAuth-only (`password: null`) **boleh**; **tidak** menyentuh `emailVerifiedAt` |
@@ -186,7 +187,12 @@ Dipakai **hanya** oleh route handler `apps/web/app/api/auth/google{,/callback}/r
   `/api/auth/google/callback` dari `request.url`.
 - `safeNext(next)` membatasi tujuan redirect (anti open-redirect).
 - `completeGoogleOAuth(request)` → tukar kode → `verifyIdToken` (`google-auth-library`) →
-  `authService.oauthLogin({ provider:'google', providerId: sub, email, name, emailVerified })`.
+  `resolveGooglePicture(access_token, payload.picture)` →
+  `authService.oauthLogin({ provider:'google', providerId: sub, email, name, emailVerified, image })`.
+- `resolveGooglePicture(accessToken, idTokenPicture, { fetchImpl? })` → claim `picture` ID token;
+  bila kosong GET `https://openidconnect.googleapis.com/v1/userinfo` dengan
+  `Authorization: Bearer <access_token>`. Hasil `string` \| `null` \| `undefined`
+  (**tidak pernah melempar** — foto bukan alasan login gagal). Bisa diuji lewat `fetchImpl`.
 - Hasil `GoogleOAuthError`: `oauth`, `oauth_config`, `oauth_account_linked`,
   `oauth_email_unverified` — dikonversi route handler jadi redirect
   `/auth/login?error=<kode>` dan dipetakan di `apps/web/app/auth/login/page.tsx` (`OAUTH_ERRORS`).
@@ -221,11 +227,13 @@ Dipakai **hanya** oleh route handler `apps/web/app/api/auth/google{,/callback}/r
 
 ## 11. Test domain
 
-- `src/domain/*.spec.ts` + `src/next/*.spec.ts` + `src/next/server/*.spec.ts` = **103 test /
-  7 suite** — terbanyak di repo.
+- `src/domain/*.spec.ts` + `src/next/*.spec.ts` + `src/next/server/*.spec.ts` = **116 test /
+  8 suite** — terbanyak di repo.
 - `jest.mock('@packages/db')` (tanpa DB nyata), `jest.mock('next/headers')` untuk server;
   mock Prisma di spec domain wajib ikut menambah model baru (mis. `passwordResetToken:
-  { findUnique, create, deleteMany }`).
+  { findUnique, create, deleteMany }`, `oAuthAccount: { findUnique, create, update }`).
+  `src/next/oauth.spec.ts` memakai `jest.mock('../domain/auth.service')` agar tidak
+  memuat `@packages/db` sama sekali.
 - Konvensi: fixture user memuat `emailVerifiedAt`; beforeEach selalu
   `delete process.env.VERIFY_TOKEN_TTL_HOURS` / `RESET_TOKEN_TTL_HOURS` /
   `AUTH_SESSION_TTL_HOURS` / `JWT_SECRET` agar default TTL tidak bocor antar-test.

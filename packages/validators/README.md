@@ -93,7 +93,7 @@ packages/validators/
     ├── index.ts          # re-export semua
     ├── contract.ts       # envelope + helpers + httpStatus + ErrorCode
     ├── types/            # interface kanonik (HealthResponse, AuthUser, RegisterRequest, LoginRequest, LoginResponse, Pagination*)
-    ├── schemas/          # Zod (authUserSchema, loginResponseSchema, registerRequestSchema, resetPasswordRequestSchema, health, pagination)
+    ├── schemas/          # Zod (authUserSchema, loginResponseSchema, registerRequestSchema, resetPasswordRequestSchema, imageUrlSchema, health, pagination)
     └── dtos/             # class-validator (RegisterRequestDto, LoginRequestDto, PaginationQueryDto)
 ```
 
@@ -112,3 +112,5 @@ packages/validators/
 - tsconfig extends preset **nest** karena DTO memakai decorators (`experimentalDecorators` + `emitDecoratorMetadata`), namun `types: []` dan eslint preset **base** — package ini murni, tanpa asumsi runtime Node/browser tertentu.
 - Zod 4 (dual ESM/CJS) → di-build ke CJS, konsumsi lintas app aman.
 - Aturan nilai (min/max) hidup di schema Zod **dan** DTO secara paralel — saat mengubah batas, ubah keduanya (dicek sama oleh interface untuk bentuknya).
+- `authUserSchema.image` wajib `string | null` (pakai `null` ketimbang `undefined` agar beda "tak ada foto" vs "belum diketahui" bisa dibedakan oleh konsumen seperti `UserAuth`/`NavUser`).
+- `imageUrlSchema` menolak apa pun selain `http(s)://` — pakai regex, **bukan** `new URL()` (tsconfig package ini `types: []`, jadi global `URL` tidak tersedia; selain itu `new URL()` juga menerima `javascript:`/`data:`/`ftp:`).

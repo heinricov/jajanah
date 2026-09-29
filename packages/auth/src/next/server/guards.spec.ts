@@ -22,6 +22,7 @@ const user: AuthUser = {
   id: 'u-1',
   name: 'Demo',
   email: 'user@jajanah.local',
+  image: null,
   role: 'USER',
   lastLoginAt: null,
   isActive: true,

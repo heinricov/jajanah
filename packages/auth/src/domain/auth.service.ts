@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { prisma } from '@packages/db';
 import {
   authUserSchema,
+  imageUrlSchema,
   type AuthUser,
   type LoginRequest,
   type LoginResponse,
@@ -36,6 +37,14 @@ export interface OAuthLoginInput {
   name: string;
   /** Boolean `email_verified` dari ID token — ditolak bila false. */
   emailVerified: boolean;
+  /**
+   * URL foto dari penyedia (Google `picture`):
+   * - `string` → URL valid (http/https, ≤2048) yang disimpan;
+   * - `null`   → penyedia bilang tidak ada foto → kolom dikosongkan;
+   * - `undefined` (default) → tidak diketahui (mis. gagal ambil userinfo) →
+   *   nilai lama TIDAK diubah (jangan sampai error jaringan menghapus avatar).
+   */
+  image?: string | null;
 }
 
 type AuthRow = {
@@ -46,6 +55,7 @@ type AuthRow = {
   role: Role;
   lastLoginAt: Date | null;
   isActive: boolean;
+  image: string | null;
   emailVerifiedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -55,11 +65,27 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * Validasi URL foto sebelum disimpan/sebelum masuk ke `authUserSchema`
+ * (zod akan melempar kalau nilai di DB tidak valid). `undefined` dipertahankan
+ * sebagai "tidak diketahui"; nilai liar (javascript:/data:/terlalu panjang)
+ * diperlakukan sebagai "tidak ada foto" (`null`).
+ */
+function sanitizeImageUrl(value: string | null | undefined): string | null | undefined {
+  if (value === undefined || value === null) return value;
+  const parsed = imageUrlSchema.safeParse(value);
+  // URL tidak valid (`javascript:`, data:, dst) → diperlakukan sebagai "tidak
+  // diketahui" (undefined), bukan "tanpa foto" (null), supaya avatar lama tidak
+  // ikut terhapus karena nilai rusak dari penyedia.
+  return parsed.success ? parsed.data : undefined;
+}
+
 function toAuthUser(row: AuthRow): AuthUser {
   return authUserSchema.parse({
     id: row.id,
     name: row.name,
     email: row.email,
+    image: sanitizeImageUrl(row.image) ?? null,
     role: row.role,
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
     isActive: row.isActive,
@@ -184,11 +210,17 @@ export class AuthService {
     if (!provider || !input.providerId) {
       throw new AuthError('INVALID_CREDENTIALS', 'Invalid OAuth identity');
     }
+    const image = sanitizeImageUrl(input.image);
 
     const account = await prisma.oAuthAccount.findUnique({
       where: { provider_providerId: { provider, providerId: input.providerId } },
       include: { auth: true },
     });
+
+    // Foto terbaru dari penyedia → kolom sumber-kebenaran per penyedia.
+    if (account && image !== undefined && image !== account.image) {
+      await prisma.oAuthAccount.update({ where: { id: account.id }, data: { image } });
+    }
 
     let auth: AuthRow | null = account ? account.auth : null;
     if (!auth) {
@@ -196,7 +228,13 @@ export class AuthService {
       if (auth) {
         try {
           await prisma.oAuthAccount.create({
-            data: { provider, providerId: input.providerId, email, authId: auth.id },
+            data: {
+              provider,
+              providerId: input.providerId,
+              email,
+              authId: auth.id,
+              image: image ?? null,
+            },
           });
         } catch (error) {
           if (isUniqueViolation(error)) {
@@ -219,6 +257,7 @@ export class AuthService {
             email,
             password: null,
             role: 'USER',
+            image: image ?? null,
             // Google sudah memastikan email terverifikasi → langsung tandai.
             emailVerifiedAt: new Date(),
           },
@@ -236,7 +275,13 @@ export class AuthService {
       auth = created;
       try {
         await prisma.oAuthAccount.create({
-          data: { provider, providerId: input.providerId, email, authId: auth.id },
+          data: {
+            provider,
+            providerId: input.providerId,
+            email,
+            authId: auth.id,
+            image: image ?? null,
+          },
         });
       } catch (error) {
         if (isUniqueViolation(error)) {
@@ -258,6 +303,12 @@ export class AuthService {
         where: { id: auth.id },
         data: { emailVerifiedAt: new Date() },
       });
+    }
+
+    // Sinkronkan avatar yang ditampilkan: foto penyedia menimpa `Auth.image`
+    // (undefined = gagal diambil → nilai lama dibiarkan, jangan dihapus).
+    if (image !== undefined && image !== auth.image) {
+      auth = await prisma.auth.update({ where: { id: auth.id }, data: { image } });
     }
 
     return this.createSession(auth, context);

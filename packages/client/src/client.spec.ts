@@ -119,6 +119,7 @@ describe('ApiClient auth endpoints', () => {
     id: '3f1d3f2e-1c5a-4b7e-9d2a-8f6b5c4e3a21',
     name: 'Budi',
     email: 'budi@example.com',
+    image: null,
     role: 'USER',
     lastLoginAt: null,
     isActive: true,

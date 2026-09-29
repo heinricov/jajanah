@@ -12,7 +12,9 @@ export function AuthDashboardLayout({ children }: { children: React.ReactNode })
 
   return (
     <DashboardLayout
-      {...(user !== null ? { user: { name: user.name, email: user.email } } : {})}
+      {...(user !== null
+        ? { user: { name: user.name, email: user.email, avatar: user.image } }
+        : {})}
       onLogout={async () => {
         await logout();
         router.replace('/auth/login');

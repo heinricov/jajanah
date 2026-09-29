@@ -21,6 +21,8 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  /** Foto profil dari OAuth (`Auth.image`) — null = tampilkan inisial. */
+  image: string | null;
   role: Role;
   lastLoginAt: string | null;
   isActive: boolean;

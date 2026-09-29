@@ -2,7 +2,7 @@ jest.mock('@packages/db', () => ({
   prisma: {
     auth: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     session: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
-    oAuthAccount: { findUnique: jest.fn(), create: jest.fn() },
+    oAuthAccount: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
     emailVerificationToken: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
     passwordResetToken: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
   },
@@ -19,6 +19,7 @@ type AuthRow = {
   id: string;
   name: string;
   email: string;
+  image: string | null;
   password: string | null;
   role: 'USER' | 'ADMIN';
   lastLoginAt: Date | null;
@@ -32,7 +33,7 @@ const { prisma } = jest.requireMock('@packages/db') as {
   prisma: {
     auth: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
     session: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
-    oAuthAccount: { findUnique: jest.Mock; create: jest.Mock };
+    oAuthAccount: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
     emailVerificationToken: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
     passwordResetToken: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
   };
@@ -43,6 +44,7 @@ function makeRow(overrides: Partial<AuthRow> = {}): AuthRow {
     id: randomUUID(),
     name: 'Budi',
     email: 'budi@example.com',
+    image: null,
     password: 'scrypt$16384$8$1$c2FsdA$aGFzaA',
     role: 'USER',
     lastLoginAt: null,
@@ -438,6 +440,127 @@ describe('AuthService', () => {
       expect(error).toBeInstanceOf(AuthError);
       expect(error.code).toBe('UNAUTHORIZED');
       expect(prisma.session.create).not.toHaveBeenCalled();
+    });
+
+    it('menyimpan foto Google ke Auth.image DAN OAuthAccount.image (akun baru)', async () => {
+      const image = 'https://lh3.googleusercontent.com/a/new-photo';
+      const row = makeRow({ password: null, image });
+      prisma.oAuthAccount.findUnique.mockResolvedValue(null);
+      prisma.auth.findUnique.mockResolvedValue(null);
+      prisma.auth.create.mockResolvedValue(row);
+      prisma.oAuthAccount.create.mockResolvedValue({ id: 'oa-img-1' });
+      mockSessionLifecycle(row);
+
+      const response = await authService.oauthLogin(makeOAuthInput({ image }));
+
+      expect(
+        (prisma.auth.create.mock.calls[0]?.[0] as { data: { image?: string } }).data.image,
+      ).toBe(image);
+      expect(
+        (prisma.oAuthAccount.create.mock.calls[0]?.[0] as { data: { image?: string } }).data.image,
+      ).toBe(image);
+      expect(response.user.image).toBe(image);
+    });
+
+    it('foto terbaru menimpa Auth.image + OAuthAccount.image pada login berikutnya', async () => {
+      const oldImage = 'https://lh3.googleusercontent.com/a/old-photo';
+      const newImage = 'https://lh3.googleusercontent.com/a/new-photo';
+      const row = makeRow({ password: null, image: oldImage });
+      prisma.oAuthAccount.findUnique.mockResolvedValue({
+        id: 'oa-img-2',
+        auth: row,
+        image: oldImage,
+      });
+      mockSessionLifecycle(row);
+      prisma.auth.update.mockResolvedValue({
+        ...row,
+        image: newImage,
+        lastLoginAt: new Date(LAST_LOGIN),
+        updatedAt: new Date(LAST_LOGIN),
+      });
+
+      const response = await authService.oauthLogin(makeOAuthInput({ image: newImage }));
+
+      expect(prisma.oAuthAccount.update).toHaveBeenCalledWith({
+        where: { id: 'oa-img-2' },
+        data: { image: newImage },
+      });
+      expect(prisma.auth.update.mock.calls[0]?.[0]).toEqual({
+        where: { id: row.id },
+        data: { image: newImage },
+      });
+      expect(response.user.image).toBe(newImage);
+    });
+
+    it('foto tidak dapat dipastikan (undefined) → nilai lama tidak dihapus', async () => {
+      const oldImage = 'https://lh3.googleusercontent.com/a/old-photo';
+      const row = makeRow({ password: null, image: oldImage });
+      prisma.oAuthAccount.findUnique.mockResolvedValue({
+        id: 'oa-img-3',
+        auth: row,
+        image: oldImage,
+      });
+      mockSessionLifecycle(row);
+
+      const response = await authService.oauthLogin(makeOAuthInput());
+
+      expect(prisma.oAuthAccount.update).not.toHaveBeenCalled();
+      expect(prisma.auth.update).toHaveBeenCalledTimes(1);
+      expect(prisma.auth.update).toHaveBeenCalledWith({
+        where: { id: row.id },
+        data: { lastLoginAt: expect.any(Date) },
+      });
+      expect(response.user.image).toBe(oldImage);
+    });
+
+    it('penyedia memastikan tanpa foto (null) → kedua kolom dikosongkan', async () => {
+      const row = makeRow({
+        password: null,
+        image: 'https://lh3.googleusercontent.com/a/old-photo',
+      });
+      prisma.oAuthAccount.findUnique.mockResolvedValue({
+        id: 'oa-img-4',
+        auth: row,
+        image: row.image,
+      });
+      mockSessionLifecycle(row);
+      prisma.auth.update.mockResolvedValue({
+        ...row,
+        image: null,
+        lastLoginAt: new Date(LAST_LOGIN),
+        updatedAt: new Date(LAST_LOGIN),
+      });
+
+      const response = await authService.oauthLogin(makeOAuthInput({ image: null }));
+
+      expect(prisma.oAuthAccount.update).toHaveBeenCalledWith({
+        where: { id: 'oa-img-4' },
+        data: { image: null },
+      });
+      expect(prisma.auth.update.mock.calls[0]?.[0]).toEqual({
+        where: { id: row.id },
+        data: { image: null },
+      });
+      expect(response.user.image).toBeNull();
+    });
+
+    it('URL non-http(s) dari penyedia ditolak — tidak ditulis ke mana pun', async () => {
+      const oldImage = 'https://lh3.googleusercontent.com/a/old-photo';
+      const row = makeRow({ password: null, image: oldImage });
+      prisma.oAuthAccount.findUnique.mockResolvedValue({
+        id: 'oa-img-5',
+        auth: row,
+        image: oldImage,
+      });
+      mockSessionLifecycle(row);
+
+      const response = await authService.oauthLogin(
+        makeOAuthInput({ image: 'javascript:alert(document.cookie)' }),
+      );
+
+      expect(prisma.oAuthAccount.update).not.toHaveBeenCalled();
+      expect(prisma.auth.update).toHaveBeenCalledTimes(1);
+      expect(response.user.image).toBe(oldImage);
     });
   });
 

@@ -1,7 +1,7 @@
 # Status proyek — fitur, gap, riwayat, pekerjaan berikutnya
 
-Diverifikasi pada commit **`5c02c1a`** (branch `main`, remote
-`github.com/heinricov/jajanah`). **Fitur reset password ada di working tree
+Diverifikasi pada commit **`d805be4`** (branch `main`, remote
+`github.com/heinricov/jajanah`). **Fitur avatar profil OAuth ada di working tree
 belum di-commit** (sesi yang sama dengan pembaruan skill ini).
 Perbarui bagian ini setiap kali fitur besar selesai.
 
@@ -12,8 +12,8 @@ Platform **autentikasi** yang lengkap dan teruji, di atas kerangka monorepo SSOT
 atau halaman selain auth/dashboard-shell. Bila user mengarah ke scope produk (mis. jual
 beli/makanan), konfirmasi dulu sebelum menggali schema bisnis.
 
-Statistik: 168 test / 17 suite (semua hijau), CI 5 langkah, 14 workspace
-(3 app, 8 package, 4 configs + scripts), 26 commit, penulis tunggal.
+Statistik: 181 test / 18 suite (semua hijau), CI 5 langkah, 14 workspace
+(3 app, 8 package, 4 configs + scripts), 28 commit, penulis tunggal.
 
 ## 2. Peta fitur
 
@@ -24,6 +24,7 @@ Statistik: 168 test / 17 suite (semua hijau), CI 5 langkah, 14 workspace
 | Verifikasi email (token one-time, TTL 24 jam, kirim ulang) | `auth.service.{requestEmailVerification,verifyEmail}`, `apps/web/app/auth/verify-email` | ✅ |
 | Login password (scrypt + anti timing-oracle, blokir belum verifikasi 403) | `auth.service.login`, `loginAction` | ✅ |
 | Google OAuth (web saja; state cookie, safeNext, auto-link) | `packages/auth/src/next/oauth.ts`, `apps/web/app/api/auth/google*` | ✅ |
+| **Avatar profil OAuth** — `Auth.image` (ditampilkan) + `OAuthAccount.image` (per penyedia); foto dari claim `picture` ID token → fallback GET userinfo | `resolveGooglePicture` (`next/oauth.ts`), `oauthLogin` (sinkron dua kolom), `sanitizeImageUrl`, `NavbarUser`/`NavUserUser` | ✅ (sesi terakhir — belum di-commit) |
 | Logout revocable (DB `jti`) + cookie clear | `auth.service.logout`, `logoutAction` | ✅ |
 | Guard: `requireAuth` / `requireAdmin` + `proxy.ts` 2 lapis | `packages/auth/src/next/server/guards.ts`, `apps/*/proxy.ts` | ✅ |
 | Navbar user-aware + menu Logout | `packages/ui/src/navigations`, `apps/web/components/site-navbar.tsx` | ✅ |
@@ -31,7 +32,7 @@ Statistik: 168 test / 17 suite (semua hijau), CI 5 langkah, 14 workspace
 | REST API auth (`/auth/*` Bearer) + filter error envelope | `apps/api/src/{auth,filters}` | ✅ (dipakai konsumen eksternal saja) |
 | Logger terstruktur (ALS requestId, redaction) | `packages/logger` | ✅ |
 | Env loader + port bin + CI | `packages/environment`, `configs/next`, `.github/workflows` | ✅ |
-| **Forgot/reset password** | `PasswordResetToken` + `requestPasswordReset`/`resetPassword`, `forgotPasswordAction`/`resetPasswordAction`, halaman web & admin, `sendPasswordResetEmail` | ✅ (sesi terakhir — belum di-commit) |
+| **Forgot/reset password** | `PasswordResetToken` + `requestPasswordReset`/`resetPassword`, `forgotPasswordAction`/`resetPasswordAction`, halaman web & admin, `sendPasswordResetEmail` | ✅ (`782da6c`) |
 | GitHub OAuth | tipe `SocialProvider = 'google' \| 'github'` di `packages/ui/src/auth/social-buttons.tsx` | ❌ dideklarasikan, belum diimplementasi ("github menyusul") |
 | `not-found.tsx` / `loading.tsx` / `error.tsx` | kedua app Next | ❌ belum ada (pakai default Next) |
 | Email konfirmasi untuk registrasi via REST API | `apps/api/src/auth/auth.controller.ts` | ❌ **belum ada path email** — hanya server action |
@@ -97,8 +98,10 @@ Urutan verifikasi sebelum commit: `pnpm format` → `pnpm check` → `pnpm test`
 | 8 | **Google OAuth** | `d6e4a1e` |
 | 9 | Navbar pakai `UserAuth` + logout | `b43c2c2` |
 | 10 | **Konfirmasi email registrasi** + `@packages/email` | `0a852ff` |
-| 11 | Skill opencode `jajanah-project` | `5c02c1a` (HEAD) |
-| 12 | **Reset password (lupa password)** — belum di-commit (working tree sesi ini) | — |
+| 11 | Skill opencode `jajanah-project` | `5c02c1a` |
+| 12 | **Reset password (lupa password)** | `782da6c` |
+| 13 | **Dokumen diagnosa email tidak sampai** (precedence `.env.<mode>`, suppression list) | `d805be4` (HEAD) |
+| 14 | **Avatar profil OAuth** — belum di-commit (working tree sesi ini) | — |
 
 ## 7. Kandidat pekerjaan berikutnya
 
@@ -124,5 +127,6 @@ Urutan verifikasi sebelum commit: `pnpm format` → `pnpm check` → `pnpm test`
 
 Migrasi (urut): `20260926112330_auth` → `20260928064048` (OAuth, `password` jadi nullable)
 → `20260928101815_email_verification` (emailVerifiedAt + EmailVerificationToken)
-→ `20260929033248_password_reset` (PasswordResetToken).
+→ `20260929033248_password_reset` (PasswordResetToken)
+→ `20260929062723_auth_image` (`image` di `Auth` + `OAuthAccount`).
 Jalankan `pnpm --filter @packages/db db:seed` untuk idempoten seed + backfill.

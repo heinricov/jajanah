@@ -52,6 +52,7 @@ const user: AuthUser = {
   id: 'u-1',
   name: 'Budi',
   email: 'budi@example.com',
+  image: null,
   role: 'USER',
   lastLoginAt: null,
   isActive: true,
