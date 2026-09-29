@@ -2,7 +2,7 @@
 
 Aplikasi web publik **jajanah** — [Next.js](https://nextjs.org) 16 (App Router, Turbopack) + komponen dari [`@packages/ui`](../../packages/ui/README.md). Berjalan di port **3000** (default; ubah lewat `WEB_PORT` di root `.env`).
 
-Auth dijalankan **tanpa endpoint API di app ini**: halaman memanggil `useAuth()` (`@packages/auth/next`) → server actions di [`@packages/auth`](../../packages/auth/README.md) (`loginAction`/`registerAction`/`logoutAction`/`meAction`) → domain `authService` langsung, cookie httpOnly di-set server-side. Data API lain (mis. demo health) lewat [`@packages/client`](../../packages/client/README.md).
+Auth dijalankan **tanpa endpoint API di app ini**: halaman memanggil `useAuth()` (`@packages/auth/next`) → server actions di [`@packages/auth`](../../packages/auth/README.md) (`loginAction`/`registerAction`/`resendVerificationAction`/`forgotPasswordAction`/`resetPasswordAction`/`logoutAction`/`meAction`) → domain `authService` langsung, cookie httpOnly di-set server-side. Data API lain (mis. demo health) lewat [`@packages/client`](../../packages/client/README.md).
 
 ## Perintah
 
@@ -28,17 +28,20 @@ apps/web/
 ├── components.json     # config CLI shadcn — komponen baru masuk components/, utils → @packages/ui
 ├── proxy.ts            # lapis-1: cookie tj_token ada? → selain itu redirect /auth/login (edge, cek keberadaan saja)
 ├── components/
-│   └── health-status.tsx  # demo: apiClient.getHealth() (@packages/client) → status API
+│   ├── health-status.tsx  # demo: apiClient.getHealth() (@packages/client) → status API
+│   ├── resend-verification.tsx # tombol kirim ulang email konfirmasi (halaman verify-email)
+│   └── reset-password-form.tsx # form setel password baru → resetPasswordAction
 └── app/
     ├── layout.tsx      # globals.css + font Oxanium + <AuthProvider initialUser={await getSessionUser()}> + Navbar/Footer (@packages/ui/navigations)
     ├── page.tsx        # landing publik
-    ├── auth/           # login / register / forgot-password (client pages, via useAuth())
+    ├── auth/           # login / register / verify-email (server) / forgot-password + new-password (reset password)
+    ├── api/auth/       # GET google{,/callback} — 2 route handler OAuth (satu-satunya endpoint app)
     └── (protected)/
         ├── layout.tsx  # requireAuth() — verifikasi otoritatif ke domain, redirect bila belum login
         └── home/       # halaman terproteksi (butuh sesi)
 ```
 
-Catatan: **tidak ada `app/api/`** — app ini sengaja tidak mendefinisikan endpoint apa pun.
+Catatan: satu-satunya endpoint di app ini adalah 2 route handler OAuth (`app/api/auth/google{,/callback}`); semua auth lain lewat server action `@packages/auth` — jangan menambah endpoint baru.
 
 ## Aturan SSOT
 

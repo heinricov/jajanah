@@ -11,9 +11,9 @@ dependensi berubah.
 | `packages/environment` | `@packages/environment` | **CJS mentah** (`index.js`, tanpa build) | — | — | dotenv, dotenv-expand |
 | `packages/logger` | `@packages/logger` | CJS | tsc | ✅ 3 suite/24 test | — (`@nestjs/common` **dev-only**, `import type`) |
 | `packages/db` | `@packages/db` | CJS | `prisma generate && tsc` | — | `@packages/environment` |
-| `packages/email` | `@packages/email` | CJS | tsc | ✅ 1/5 | **nol dependency runtime** |
+| `packages/email` | `@packages/email` | CJS | tsc | ✅ 1/8 | **nol dependency runtime** |
 | `packages/client` | `@packages/client` | CJS (preset browser) | tsc | ✅ 1/13 | `@packages/validators` |
-| `packages/auth` | `@packages/auth` | CJS + raw source `/next**` | tsc (exclude `src/next/**`) | ✅ 7/86 | db, email, environment, validators + `google-auth-library` |
+| `packages/auth` | `@packages/auth` | CJS + raw source `/next**` | tsc (exclude `src/next/**`) | ✅ 7/103 | db, email, environment, validators + `google-auth-library` |
 | `packages/ui` | `@packages/ui` | **ESM source** (`type: module`, tanpa build) | — | — | **nol workspace dep** (radix/base-ui/tailwind/zod/dll) |
 | `configs/*` | `@configs/{eslint,next,prettier,typescript}` | ESM | — | — | `@configs/next` → `@packages/environment` |
 | `apps/api` | `api` | **CJS** (builder `nest build` = `tsc`) | nest build | ✅ 5/20 | auth, environment, logger, validators |
@@ -38,10 +38,14 @@ httpStatus = { ok:200, created:201, badRequest:400, unauthorized:401, forbidden:
 PAGINATION_DEFAULTS = { page: 1, limit: 20 }
 ```
 
-`API_ERROR_CODES` (13, urutan berpengaruh untuk type):
+`API_ERROR_CODES` (14, urutan berpengaruh untuk type):
 `BAD_REQUEST`, `VALIDATION`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`,
 `EMAIL_TAKEN`, `EMAIL_NOT_VERIFIED`, `INVALID_CREDENTIALS`, `OAUTH_ACCOUNT_LINKED`,
-`OAUTH_EMAIL_UNVERIFIED`, `INVALID_VERIFY_TOKEN`, `INTERNAL`.
+`OAUTH_EMAIL_UNVERIFIED`, `INVALID_VERIFY_TOKEN`, `INVALID_RESET_TOKEN`, `INTERNAL`.
+
+**Jebakan**: konsumen memuat package ini dari **`dist/`** (CJS) — setelah menambah
+export bernilai (schema/const), jalankan `pnpm --filter @packages/validators build`,
+kalau tidak runtime dapat `undefined` (type-only import tidak menangkap ini).
 
 ### Prosedur menambah kontrak baru (dari README validators)
 
@@ -98,8 +102,8 @@ createApiClient(options?: { baseUrl?, fetch? })
 - Schema `prisma/schema.prisma`: `enum Role { USER ADMIN }` + model
   `Auth` (unique `email`, `password String?`, `emailVerifiedAt DateTime?`, `isActive`),
   `Session` (`token` = jti JWT, `expiresAt`, `authAgent?`, `ipAddress?`),
-  `OAuthAccount` (`@@unique([provider, providerId])`), `EmailVerificationToken`
-  (`token @unique`, `expiresAt`). FK `onDelete: Cascade`.
+  `OAuthAccount` (`@@unique([provider, providerId])`), `EmailVerificationToken`,
+  `PasswordResetToken` (keduanya: `token @unique`, `expiresAt`). FK `onDelete: Cascade`.
 - Tidak ada `url` di schema (Prisma 7): datasource dibaca `prisma.config.ts` dari
   `process.env.DATABASE_URL`, koneksi pakai driver adapter `@prisma/adapter-pg`.
 - Client di-generate ke `packages/db/src/generated/prisma/` (**gitignored**).
@@ -116,7 +120,10 @@ pnpm --filter @packages/db studio
 
 - Migrasi = folder `prisma/migrations/<timestamp>_<nama>/migration.sql`, timestamp dibuat
   otomatis Prisma. Sudah ada: `20260926112330_auth`, `20260928064048`,
-  `20260928101815_email_verification`.
+  `20260928101815_email_verification`, `20260929033248_password_reset`.
+  **Gotcha**: `prisma migrate dev` bisa hang menunggu stdin bila dijalankan non-interaktif
+  — pakai `< /dev/null` dan pastikan `prisma generate` ikut jalan (client lama = model
+  baru tak terlihat typecheck).
 - **Seed berada di `@packages/auth`** (`src/domain/seed.ts`) — arah `db → auth` akan
   membentuk cycle Turbo. Prisma config memanggil `node ../auth/dist/domain/seed.js`,
   maka `db:seed` mem-build auth dulu.
@@ -168,14 +175,17 @@ REQUEST_ID_HEADER = 'x-request-id'
 ## @packages/email — adapter pengiriman
 
 ```ts
-sendConfirmationEmail(input: ConfirmationEmailInput, deps?: SendDeps): Promise<SendResult>
-emailService.sendConfirmation = sendConfirmationEmail          // alias konsumen
-ConfirmationEmailInput = { to: string; name: string; link: string }
+sendConfirmationEmail(input, deps?): Promise<SendResult>       // email konfirmasi
+sendPasswordResetEmail(input, deps?): Promise<SendResult>      // tautan reset password
+emailService = { sendConfirmation, sendPasswordReset }         // alias konsumen
+ConfirmationEmailInput = PasswordResetEmailInput = { to: string; name: string; link: string }
 SendResult = { delivered: true } | { delivered: false; reason: 'no_api_key' }
 SendDeps = { fetchImpl?: FetchLike }                            // injeksi untuk test
 ```
 
-- `RESEND_API_KEY` kosong → **bukan error**: `console.log` tautan konfirmasi + return
+- Kedua fungsi lewat helper privat `deliver(payload, deps)` — satu jalur POST Resend
+  (cek API key → fallback console → `fetchImpl` → `!response.ok` → throw).
+- `RESEND_API_KEY` kosong → **bukan error**: `console.log` tautan + return
   `{ delivered:false, reason:'no_api_key' }` (fallback development).
 - Resend non-2xx → `throw new Error('[email] Resend gagal (HTTP <status>) <detail>')`.
 - `MAIL_FROM` default `Jajanah <onboarding@resend.dev>`; `APP_NAME` default `Jajanah`.
@@ -186,8 +196,8 @@ SendDeps = { fetchImpl?: FetchLike }                            // injeksi untuk
 
 1. Type `...EmailInput` + helper `subject…()` / `…Html()` / `…Text()` (pakai ulang
    `escapeHtml`, `resolveBrand`, `resolveFrom`).
-2. `export async function sendXEmail(...)` dengan pola sama: cek API key → fallback
-   console → `fetchImpl` → cek `!response.ok` → throw.
+2. `export async function sendXEmail(...)` yang menyusun payload lalu memanggil
+   `deliver(payload, deps)` (jalur kirim sudah disalinakan — jangan duplikasi fetch).
 3. Daftarkan di objek `emailService`.
 4. Tambah test di `src/email.spec.ts` (fallback, payload, error HTTP).
 5. Env baru → `.env.example` + README bagian Environment.

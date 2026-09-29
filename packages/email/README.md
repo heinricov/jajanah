@@ -1,12 +1,12 @@
 # @packages/email
 
-**SSOT pengiriman email** — satu-satunya tempat pengiriman email aplikasi didefinisikan (saat ini: email konfirmasi registrasi). Adapter HTTP API [Resend](https://resend.com) via `fetch` bawaan Node.js — **tanpa dependency runtime**.
+**SSOT pengiriman email** — satu-satunya tempat pengiriman email aplikasi didefinisikan (saat ini: konfirmasi registrasi & tautan reset password). Adapter HTTP API [Resend](https://resend.com) via `fetch` bawaan Node.js — **tanpa dependency runtime**.
 
 - `RESEND_API_KEY` terisi → kirim sungguhan ke `https://api.resend.com/emails`.
-- `RESEND_API_KEY` kosong (development/CI) → **fallback console**: tautan konfirmasi di-log ke server, sehingga alur registrasi → konfirmasi → login bisa diuji penuh tanpa layanan email sungguhan.
+- `RESEND_API_KEY` kosong (development/CI) → **fallback console**: tautan di-log ke server, sehingga alur registrasi → konfirmasi → login (dan lupa password → reset) bisa diuji penuh tanpa layanan email sungguhan.
 
 ```
-@packages/auth (registerAction / resendVerificationAction)
+@packages/auth (registerAction / resendVerificationAction / forgotPasswordAction)
         │  { to, name, link }
         ▼
 @packages/email  ── RESEND_API_KEY kosong? ──► console (link di-log)
@@ -26,16 +26,27 @@ const result = await emailService.sendConfirmation({
   link: 'https://app.example.com/auth/verify-email?token=…',
 });
 
+await emailService.sendPasswordReset({
+  to: 'budi@example.com',
+  name: 'Budi',
+  link: 'https://app.example.com/auth/forgot-password/new-password?token=…',
+});
+
 // { delivered: true }              → email terkirim
 // { delivered: false, reason: 'no_api_key' } → fallback console (bukan kesalahan)
 // throw                            → API Resend non-2xx (pemanggil boleh mengabaikan)
 ```
 
-`sendConfirmationEmail(input, deps?)` juga bisa dipanggil langsung dengan `deps.fetchImpl` injectable untuk test.
+`sendConfirmationEmail(input, deps?)` / `sendPasswordResetEmail(input, deps?)` juga bisa dipanggil langsung dengan `deps.fetchImpl` injectable untuk test.
 
 ## Template
 
-Satu email aktif: **Konfirmasi email Anda** (subjek `Konfirmasi email Anda — <APP_NAME>`), versi HTML + plain-text, nama penerima di-escape (aman dari HTML injection), tombol tautan + URL fallback untuk klien yang memblokir tombol.
+Dua email aktif, pola sama — versi HTML + plain-text, nama penerima di-escape (aman dari HTML injection), tombol tautan + URL fallback untuk klien yang memblokir tombol:
+
+| Email          | Fungsi              | Subjek                               | Halaman tujuan                               |
+| -------------- | ------------------- | ------------------------------------ | -------------------------------------------- |
+| Konfirmasi     | `sendConfirmation`  | `Konfirmasi email Anda — <brand>`    | `/auth/verify-email?token=…`                 |
+| Reset password | `sendPasswordReset` | `Atur ulang password Anda — <brand>` | `/auth/forgot-password/new-password?token=…` |
 
 ## Environment
 
@@ -52,8 +63,8 @@ Nilai dibaca via `process.env` (diisi `@packages/environment` dari root `.env*` 
 ```
 packages/email/
 ├── src/
-│   ├── index.ts       # emailService + sendConfirmationEmail (adapter Resend + fallback console)
-│   └── email.spec.ts  # test adapter (fallback, payload Resend, error HTTP)
+│   ├── index.ts       # emailService + sendConfirmationEmail + sendPasswordResetEmail (adapter Resend + fallback console)
+│   └── email.spec.ts  # test adapter (fallback, payload Resend, error HTTP, email reset)
 ├── package.json       # build/lint/typecheck/test — pola sama @packages/client
 ├── tsconfig.json      # node.json (NodeNext, CJS)
 └── tsconfig.build.json
@@ -70,6 +81,7 @@ pnpm --filter @packages/email lint        # eslint
 
 ## Catatan
 
-- Konsumen saat ini hanya `@packages/auth` (server action `registerAction` & `resendVerificationAction`) — arah edge `auth → email`, tanpa siklus.
-- Ganti adapter (SMTP, SendGrid, dsb.) cukup mengganti isi `src/index.ts`; kontrak `sendConfirmation` tetap.
-- Pengiriman email gagal saat register **tidak** menggagalkan pendaftaran — akun sudah terdaftar dan user bisa meminta kirim ulang dari halaman verifikasi/login.
+- Konsumen saat ini hanya `@packages/auth` (server action `registerAction`, `resendVerificationAction` & `forgotPasswordAction`) — arah edge `auth → email`, tanpa siklus.
+- Ganti adapter (SMTP, SendGrid, dsb.) cukup mengganti isi `src/index.ts`; kontrak `sendConfirmation` & `sendPasswordReset` tetap.
+- Pengiriman email gagal saat register **tidak** menggagalkan pendaftaran — akun sudah terdaftar dan user bisa meminta kirim ulang dari halaman verifikasi/login. Sama halnya saat request reset: respons aksi selalu sukses (anti-enumerasi).
+- Pengiriman lewat fungsi privat `deliver()` (satu jalur POST Resend untuk semua email) — data per-jenis email (subjek, HTML, text, pesan log fallback) disusun masing-masing fungsi publik.

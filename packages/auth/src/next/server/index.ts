@@ -1,16 +1,20 @@
 export type {
   AuthActionFailure,
+  ForgotPasswordActionResult,
   LoginActionResult,
   LogoutActionResult,
   MeActionResult,
   RegisterActionResult,
+  ResetPasswordActionResult,
   ResendVerificationActionResult,
 } from './action-types';
 export {
+  forgotPasswordAction,
   loginAction,
   logoutAction,
   meAction,
   registerAction,
+  resetPasswordAction,
   resendVerificationAction,
 } from './actions';
 export { computeSessionMaxAge, sessionCookieOptions } from './cookie-options';

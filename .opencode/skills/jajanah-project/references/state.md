@@ -1,7 +1,8 @@
 # Status proyek — fitur, gap, riwayat, pekerjaan berikutnya
 
-Diverifikasi pada commit **`0a852ff`** (branch `main`, remote
-`github.com/heinricov/jajanah`, working tree bersih saat skill dibuat).
+Diverifikasi pada commit **`5c02c1a`** (branch `main`, remote
+`github.com/heinricov/jajanah`). **Fitur reset password ada di working tree
+belum di-commit** (sesi yang sama dengan pembaruan skill ini).
 Perbarui bagian ini setiap kali fitur besar selesai.
 
 ## 1. Posisi saat ini
@@ -11,8 +12,8 @@ Platform **autentikasi** yang lengkap dan teruji, di atas kerangka monorepo SSOT
 atau halaman selain auth/dashboard-shell. Bila user mengarah ke scope produk (mis. jual
 beli/makanan), konfirmasi dulu sebelum menggali schema bisnis.
 
-Statistik: 148 test / 17 suite (semua hijau), CI 5 langkah, 14 workspace
-(3 app, 8 package, 4 configs + scripts), 25 commit, penulis tunggal.
+Statistik: 168 test / 17 suite (semua hijau), CI 5 langkah, 14 workspace
+(3 app, 8 package, 4 configs + scripts), 26 commit, penulis tunggal.
 
 ## 2. Peta fitur
 
@@ -30,7 +31,7 @@ Statistik: 148 test / 17 suite (semua hijau), CI 5 langkah, 14 workspace
 | REST API auth (`/auth/*` Bearer) + filter error envelope | `apps/api/src/{auth,filters}` | ✅ (dipakai konsumen eksternal saja) |
 | Logger terstruktur (ALS requestId, redaction) | `packages/logger` | ✅ |
 | Env loader + port bin + CI | `packages/environment`, `configs/next`, `.github/workflows` | ✅ |
-| **Forgot/reset password** | 4 halaman stub + `FormForgotPassword`/`FormNewPassword` | ❌ **stub disabled** (UI saja, backend belum ada) |
+| **Forgot/reset password** | `PasswordResetToken` + `requestPasswordReset`/`resetPassword`, `forgotPasswordAction`/`resetPasswordAction`, halaman web & admin, `sendPasswordResetEmail` | ✅ (sesi terakhir — belum di-commit) |
 | GitHub OAuth | tipe `SocialProvider = 'google' \| 'github'` di `packages/ui/src/auth/social-buttons.tsx` | ❌ dideklarasikan, belum diimplementasi ("github menyusul") |
 | `not-found.tsx` / `loading.tsx` / `error.tsx` | kedua app Next | ❌ belum ada (pakai default Next) |
 | Email konfirmasi untuk registrasi via REST API | `apps/api/src/auth/auth.controller.ts` | ❌ **belum ada path email** — hanya server action |
@@ -47,17 +48,20 @@ Statistik: 148 test / 17 suite (semua hijau), CI 5 langkah, 14 workspace
 - **Seed men-backfill `emailVerifiedAt`** akun demo agar login tetap jalan (disebabkan
   fitur verifikasi email).
 - Admin sengaja **tanpa login Google dan tanpa self-register** (akun admin via seed/DB).
-- `apps/api` tidak punya jalur email konfirmasi (server action Next = jalur utama web).
+- `apps/api` tidak punya jalur email/konfirmasi/reset (server action Next = jalur utama web).
+- **Tautan email konfirmasi & reset selalu berbasis `APP_URL` → halaman `apps/web`** —
+  admin yang lupa password menerima tautan ke app web; set password di sana lalu kembali
+  login di panel (DB bersama). Disengaja (konsisten, satu tempat memproses token).
 - Paket `@packages/validators` memakai class-validator decorators → tsconfig extend
   preset `nest`, tapi `types: []` + eslint preset `base` (browser-safe).
 
 ## 4. Dokumen yang terbukti basi (candidate perbaikan docs)
 
-| Lokasi | Klaim yang sudah tidak benar |
-| --- | --- |
-| `README.md:22` | `scripts/ # Script operasional (masih kosong)` — padahal `scripts/dev.mjs` sudah ada |
-| `apps/web/README.md:41` | *"tidak ada `app/api/`"* — padahal sudah ada 2 route handler OAuth |
-| `packages/db/README.md:9,18,55-56` | menyebut hanya model `Auth` & `Session` — schema kini punya `OAuthAccount` + `EmailVerificationToken` |
+**Semua baris yang tercatat sudah diperbaiki** pada sesi reset password: `README.md` baris
+`scripts/` (kini menyebut `dev.mjs`), `apps/web/README.md` ("tidak ada `app/api`" — kini
+menyebut 2 route handler OAuth + entri struktur), `packages/db/README.md` (model lengkap:
+`OAuthAccount`, `EmailVerificationToken`, `PasswordResetToken`, `emailVerifiedAt`).
+Belum diverifikasi ulang menyeluruh setelah itu — cari lagi saat menyentuh file terkait.
 
 ## 5. Konvensi commit
 
@@ -92,26 +96,24 @@ Urutan verifikasi sebelum commit: `pnpm format` → `pnpm check` → `pnpm test`
 | 7 | Navbar/Footer/layout + VS Code 3-tab | `de47e04`, `d127dcb`, `7f54886` |
 | 8 | **Google OAuth** | `d6e4a1e` |
 | 9 | Navbar pakai `UserAuth` + logout | `b43c2c2` |
-| 10 | **Konfirmasi email registrasi** + `@packages/email` | `0a852ff` (HEAD) |
+| 10 | **Konfirmasi email registrasi** + `@packages/email` | `0a852ff` |
+| 11 | Skill opencode `jajanah-project` | `5c02c1a` (HEAD) |
+| 12 | **Reset password (lupa password)** — belum di-commit (working tree sesi ini) | — |
 
 ## 7. Kandidat pekerjaan berikutnya
 
-1. **Forgot/reset password** — `PasswordResetToken` di `schema.prisma` + migrasi;
-   `requestPasswordReset`/`resetPassword` di `auth.service.ts`; template email baru di
-   `packages/email` (lihat prosedur di `packages.md`); server action; nyalakan
-   `FormForgotPassword`/`FormNewPassword` + 4 halaman stub (web & admin).
-2. **Fitur domain bisnis pertama** — model Prisma → kontrak `@packages/validators` →
+1. **Fitur domain bisnis pertama** — model Prisma → kontrak `@packages/validators` →
    controller `apps/api` → method `@packages/client` → halaman `apps/web` (urutan ini
    mengikuti alur SSOT).
-3. **Isi dashboard admin** — ganti data contoh di `packages/ui/src/dashboard/*`
+2. **Isi dashboard admin** — ganti data contoh di `packages/ui/src/dashboard/*`
    (hapus `// This is sample data.`) + isi `apps/admin/app/(protected)/dashboard/page.tsx`.
-4. **UX boundary Next** — `not-found.tsx`, `loading.tsx`, `error.tsx` di kedua app.
-5. **Test yang belum ada** — `@packages/environment` (precedence loader) & komponen
+3. **UX boundary Next** — `not-found.tsx`, `loading.tsx`, `error.tsx` di kedua app.
+4. **Test yang belum ada** — `@packages/environment` (precedence loader) & komponen
    `@packages/ui` (ingat: `testRegex` hanya `.spec.ts`).
-6. **GitHub OAuth** atau hapus dari tipe `SocialProvider` (pola `next/oauth.ts` tinggal
+5. **GitHub OAuth** atau hapus dari tipe `SocialProvider` (pola `next/oauth.ts` tinggal
    ditambah provider kedua).
-7. **Perbaiki doc-drift** di §4 + tambahkan model baru ke README `packages/db`.
-8. **CORS allowlist** di `apps/api` (env baru → ikuti prosedur di `packages.md`).
+6. **Perbaiki doc-drift** sisanya (audit ulang — §4 sudah bersih saat terakhir dicek).
+7. **CORS allowlist** di `apps/api` (env baru → ikuti prosedur di `packages.md`).
 
 ## 8. Data demo & DB
 
@@ -121,5 +123,6 @@ Urutan verifikasi sebelum commit: `pnpm format` → `pnpm check` → `pnpm test`
 | `user@jajanah.local` | `user1234` | USER |
 
 Migrasi (urut): `20260926112330_auth` → `20260928064048` (OAuth, `password` jadi nullable)
-→ `20260928101815_email_verification` (emailVerifiedAt + EmailVerificationToken).
+→ `20260928101815_email_verification` (emailVerifiedAt + EmailVerificationToken)
+→ `20260929033248_password_reset` (PasswordResetToken).
 Jalankan `pnpm --filter @packages/db db:seed` untuk idempoten seed + backfill.

@@ -13,6 +13,7 @@ import {
 import { AuthError } from './errors';
 import { hashPassword, verifyPassword } from './password';
 import {
+  getResetTtlHours,
   getVerifyTtlHours,
   getSessionTtlHours,
   signSessionToken,
@@ -303,6 +304,61 @@ export class AuthService {
       where: { id: record.authId },
       data: { emailVerifiedAt: new Date() },
     });
+    return toAuthUser(updated);
+  }
+
+  /**
+   * Buat token reset password baru untuk email tsb.
+   *
+   * Email tak dikenal / akun nonaktif → `null` (anti-enumerasi): pemanggil
+   * wajib memperlakukan null sama dengan sukses. Akun OAuth-only
+   * (`password: null`) boleh — bukti kontrol email cukup untuk menyetel
+   * password pertama. Token lama dinonaktifkan — hanya tautan terbaru
+   * yang berlaku. **Tidak** menandai `emailVerifiedAt`: reset bukan
+   * konfirmasi registrasi.
+   */
+  async requestPasswordReset(
+    email: string,
+  ): Promise<{ token: string; name: string; email: string } | null> {
+    const user = await prisma.auth.findUnique({ where: { email: normalizeEmail(email) } });
+    if (!user || !user.isActive) return null;
+
+    await prisma.passwordResetToken.deleteMany({ where: { authId: user.id } });
+    const token = randomBytes(32).toString('base64url');
+    await prisma.passwordResetToken.create({
+      data: {
+        authId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + getResetTtlHours() * 3600 * 1000),
+      },
+    });
+    return { token, name: user.name, email: user.email };
+  }
+
+  /**
+   * Tukar token reset → password baru. Sekali pakai: semua token reset
+   * **dan semua sesi** akun itu dihapus setelah sukses — perangkat lain
+   * dipaksa masuk ulang dengan password baru. Token hilang/kedaluwarsa →
+   * `INVALID_RESET_TOKEN` (400).
+   */
+  async resetPassword(token: string, password: string): Promise<AuthUser> {
+    const record = await prisma.passwordResetToken.findUnique({ where: { token } });
+    if (!record || record.expiresAt.getTime() <= Date.now()) {
+      throw new AuthError('INVALID_RESET_TOKEN', 'Reset link is invalid or expired');
+    }
+
+    const account = await prisma.auth.findUnique({ where: { id: record.authId } });
+    if (!account || !account.isActive) {
+      throw new AuthError('INVALID_RESET_TOKEN', 'Reset link is invalid or expired');
+    }
+
+    const hash = await hashPassword(password);
+    await prisma.passwordResetToken.deleteMany({ where: { authId: record.authId } });
+    const updated = await prisma.auth.update({
+      where: { id: record.authId },
+      data: { password: hash },
+    });
+    await prisma.session.deleteMany({ where: { authId: record.authId } });
     return toAuthUser(updated);
   }
 

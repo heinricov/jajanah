@@ -39,6 +39,16 @@ describe('authErrorMessage', () => {
     );
   });
 
+  it('menerjemahkan kode INVALID_RESET_TOKEN ke pesan ramah', () => {
+    const error = new AuthActionError('Reset link is invalid or expired', {
+      status: 400,
+      code: 'INVALID_RESET_TOKEN',
+    });
+    expect(authErrorMessage(error)).toBe(
+      'Tautan reset password tidak valid atau sudah kedaluwarsa. Minta tautan baru.',
+    );
+  });
+
   it('menerjemahkan kode TRANSPORT ke pesan koneksi', () => {
     expect(authErrorMessage(new AuthActionError('x', { status: 0, code: 'TRANSPORT' }))).toBe(
       'Tidak dapat terhubung ke server. Coba lagi nanti.',

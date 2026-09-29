@@ -208,13 +208,18 @@ Urutan gate di CI (`.github/workflows/ci.yml`) =
 - **Login Google** (hanya `apps/web`) → `GET /api/auth/google` + `/callback`, cookie
   state `tj_oauth_state` anti-CSRF, find-or-create + auto-link, akun Google otomatis
   terverifikasi.
+- **Lupa/reset password** → `forgotPasswordAction` (anti-enumerasi) → email tautan
+  `${APP_URL}/auth/forgot-password/new-password?token=` → `resetPasswordAction` (zod)
+  → token one-time `PasswordResetToken` (TTL `RESET_TOKEN_TTL_HOURS`, default 1 jam) →
+  ganti hash + **cabut semua sesi** → redirect `/auth/login?reset=1`. Halaman aktif di
+  web & admin.
 - **Logout** mencabut sesi di DB (berdasar `jti`) + menghapus cookie.
 - **Halaman terproteksi**: `(protected)/home` di web (matcher `/home/:path*`),
   `(protected)/dashboard` di admin (matcher `/dashboard/:path*`) — via `proxy.ts`.
 - **REST API**: `GET /`, `POST /auth/register|login|logout`, `GET /auth/me`
   (Bearer token) — hanya untuk konsumen eksternal, bukan untuk Next app.
-- **Belum ada**: reset/forgot password (form disabled, stub), GitHub OAuth (tipe ada,
-  implementasi tidak), `not-found.tsx`/`loading.tsx`/`error.tsx`, isi dashboard admin.
+- **Belum ada**: GitHub OAuth (tipe ada, implementasi tidak), `not-found.tsx`/
+  `loading.tsx`/`error.tsx`, isi dashboard admin.
 
 Detail lengkap + daftar kandidat pekerjaan berikutnya → `references/state.md`.
 
@@ -222,8 +227,9 @@ Detail lengkap + daftar kandidat pekerjaan berikutnya → `references/state.md`.
 
 Baca sesuai kebutuhan, jangan semua sekaligus:
 
-- `references/auth.md` — kontrak lengkap `@packages/auth`: exports map, 5 server action,
-  metode domain, `AuthError`, format hash/JWT, cookie/guard, alur OAuth & verifikasi email.
+- `references/auth.md` — kontrak lengkap `@packages/auth`: exports map, 7 server action,
+  metode domain, `AuthError`, format hash/JWT, cookie/guard, alur OAuth, verifikasi email
+  & reset password.
 - `references/packages.md` — API publik tiap package, prosedur "menambah X" (kontrak API,
   endpoint client, env var, tipe email, komponen UI, workspace baru), matriks tsconfig/modul.
 - `references/apps.md` — peta route & boundary client/server tiap app, bootstrap

@@ -7,8 +7,10 @@ export {
   verifyPassword,
 } from './domain/password';
 export {
+  DEFAULT_RESET_TTL_HOURS,
   DEFAULT_SESSION_TTL_HOURS,
   DEFAULT_VERIFY_TTL_HOURS,
+  getResetTtlHours,
   getSessionTtlHours,
   getVerifyTtlHours,
   signSessionToken,

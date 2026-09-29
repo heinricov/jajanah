@@ -18,6 +18,8 @@ const OAUTH_ERRORS: Record<string, string> = {
 
 const VERIFIED_NOTICE = 'Email berhasil diverifikasi. Silakan masuk dengan email dan password.';
 
+const RESET_NOTICE = 'Password berhasil diperbarui. Silakan masuk dengan password baru.';
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -29,6 +31,7 @@ function LoginForm() {
 
   const oauthError = OAUTH_ERRORS[searchParams.get('error') ?? ''] ?? null;
   const verifiedNotice = searchParams.get('verified') === '1' ? VERIFIED_NOTICE : null;
+  const resetNotice = searchParams.get('reset') === '1' ? RESET_NOTICE : null;
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -50,7 +53,7 @@ function LoginForm() {
   return (
     <FormLogin
       error={oauthError ?? error}
-      notice={notice ?? verifiedNotice}
+      notice={notice ?? verifiedNotice ?? resetNotice}
       resend={!oauthError && showResend ? { onResend: handleResend } : undefined}
       isPending={pending}
       showSocial

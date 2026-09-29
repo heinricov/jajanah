@@ -2,7 +2,7 @@
 
 Panel administrasi **jajanah** — [Next.js](https://nextjs.org) 16 (App Router, Turbopack) + komponen dari [`@packages/ui`](../../packages/ui/README.md). Berjalan di port **3001** (default; ubah lewat `ADMIN_PORT` di root `.env`; berdampingan dengan `apps/web` saat `pnpm dev`).
 
-Auth dijalankan **tanpa endpoint API di app ini**: halaman memanggil `useAuth()` (`@packages/auth/next`) → server actions di [`@packages/auth`](../../packages/auth/README.md) (`loginAction`/`logoutAction`/`meAction`) → domain `authService` langsung, cookie httpOnly di-set server-side. Panel memakai `requireAdmin()` (khusus role `ADMIN`).
+Auth dijalankan **tanpa endpoint API di app ini**: halaman memanggil `useAuth()` (`@packages/auth/next`) → server actions di [`@packages/auth`](../../packages/auth/README.md) (`loginAction`/`forgotPasswordAction`/`resetPasswordAction`/`logoutAction`/`meAction`) → domain `authService` langsung, cookie httpOnly di-set server-side. Panel memakai `requireAdmin()` (khusus role `ADMIN`).
 
 ## Perintah
 
@@ -28,11 +28,12 @@ apps/admin/
 ├── components.json     # config CLI shadcn — komponen baru masuk components/, utils → @packages/ui
 ├── proxy.ts            # lapis-1: cookie tj_token ada? → selain itu redirect /auth/login (edge, cek keberadaan saja)
 ├── components/
-│   └── auth-dashboard-layout.tsx  # shell dashboard + user menu (useAuth → logout)
+│   ├── auth-dashboard-layout.tsx  # shell dashboard + user menu (useAuth → logout)
+│   └── reset-password-form.tsx    # form setel password baru → resetPasswordAction
 └── app/
     ├── layout.tsx      # import @packages/ui/globals.css + bootstrap <AuthProvider initialUser={await getSessionUser()}>
     ├── page.tsx        # redirect server-side ke /dashboard (guard login ada di (protected)/layout)
-    ├── auth/           # login / forgot-password (client pages, via useAuth(); tanpa register)
+    ├── auth/           # login / forgot-password + new-password (reset password; tanpa register)
     └── (protected)/
         ├── layout.tsx  # requireAdmin() — verifikasi token + role ADMIN, redirect bila bukan admin
         └── dashboard/  # halaman dashboard terproteksi

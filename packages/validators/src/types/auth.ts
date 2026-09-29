@@ -11,6 +11,12 @@ export interface LoginRequest {
   password: string;
 }
 
+/** Tukar token reset password (`/auth/forgot-password/new-password`) → password baru. */
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
 export interface AuthUser {
   id: string;
   name: string;

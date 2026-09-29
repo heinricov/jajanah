@@ -1,4 +1,9 @@
-import { emailService, sendConfirmationEmail, type FetchLike } from './index';
+import {
+  emailService,
+  sendConfirmationEmail,
+  sendPasswordResetEmail,
+  type FetchLike,
+} from './index';
 
 const INPUT = {
   to: 'budi@example.com',
@@ -91,5 +96,59 @@ describe('sendConfirmationEmail', () => {
 
   it('emailService.sendConfirmation adalah alias fungsi yang sama', () => {
     expect(emailService.sendConfirmation).toBe(sendConfirmationEmail);
+  });
+});
+
+describe('sendPasswordResetEmail', () => {
+  const RESET_INPUT = {
+    to: 'budi@example.com',
+    name: 'Budi <script>alert(1)</script>',
+    link: 'http://localhost:3000/auth/forgot-password/new-password?token=abc-123',
+  };
+  const originalKey = process.env.RESEND_API_KEY;
+
+  beforeEach(() => {
+    delete process.env.RESEND_API_KEY;
+    delete process.env.MAIL_FROM;
+  });
+
+  afterAll(() => {
+    process.env.RESEND_API_KEY = originalKey;
+  });
+
+  it('tanpa RESEND_API_KEY: fallback console (delivered:false) & fetch tidak dipanggil', async () => {
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>();
+
+    const result = await sendPasswordResetEmail(RESET_INPUT, { fetchImpl });
+
+    expect(result).toEqual({ delivered: false, reason: 'no_api_key' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(RESET_INPUT.link));
+    log.mockRestore();
+  });
+
+  it('dengan RESEND_API_KEY: POST ke Resend dengan payload reset password', async () => {
+    process.env.RESEND_API_KEY = 're_test_123';
+    process.env.MAIL_FROM = 'Jajanah <no-reply@jajanah.test>';
+    const fetchImpl = jest.fn().mockResolvedValue(makeResponse());
+
+    const result = await sendPasswordResetEmail(RESET_INPUT, { fetchImpl });
+
+    expect(result).toEqual({ delivered: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.resend.com/emails');
+
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.to).toEqual([RESET_INPUT.to]);
+    expect(body.subject).toContain('Atur ulang password');
+    expect(body.html).toContain(RESET_INPUT.link);
+    expect(body.text).toContain(RESET_INPUT.link);
+    expect(body.html).not.toContain('<script>');
+  });
+
+  it('emailService.sendPasswordReset adalah alias fungsi yang sama', () => {
+    expect(emailService.sendPasswordReset).toBe(sendPasswordResetEmail);
   });
 });

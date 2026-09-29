@@ -20,8 +20,8 @@ Sumber kebenaran: `packages/auth/src/**`. Pembaruan di sini wajib bila `package.
 | --- | --- | --- |
 | `.` | **dist CJS** (di-build) | domain: `authService`, `AuthError`, password & JWT helpers |
 | `./next` | **raw source ESM** | client: `AuthProvider`, `useAuth`, `AuthActionError`, `authErrorMessage`, `SESSION_COOKIE` |
-| `./next/server` | raw source | 5 action + tipe hasil + `getSessionUser`/`requireAuth`/`requireAdmin` + cookie helpers |
-| `./next/server/actions` | raw source (`'use server'`) | **hanya 5 server action** — inilah yang aman dari client component |
+| `./next/server` | raw source | 7 action + tipe hasil + `getSessionUser`/`requireAuth`/`requireAdmin` + cookie helpers |
+| `./next/server/actions` | raw source (`'use server'`) | **hanya 7 server action** — inilah yang aman dari client component |
 | `./next/cookie` | raw source | `SESSION_COOKIE` saja (zero import, edge-safe) |
 | `./next/oauth` | raw source | `beginGoogleOAuth`, `completeGoogleOAuth`, `GOOGLE_OAUTH_STATE_COOKIE`, tipe error |
 
@@ -43,8 +43,9 @@ export { authService, AuthService, type LoginContext } from './domain/auth.servi
 export { AuthError, type AuthErrorCode } from './domain/errors';
 export { hashPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, verifyPassword } from './domain/password';
 export {
-  DEFAULT_SESSION_TTL_HOURS, DEFAULT_VERIFY_TTL_HOURS,
-  getSessionTtlHours, getVerifyTtlHours, signSessionToken, verifySessionToken,
+  DEFAULT_RESET_TTL_HOURS, DEFAULT_SESSION_TTL_HOURS, DEFAULT_VERIFY_TTL_HOURS,
+  getResetTtlHours, getSessionTtlHours, getVerifyTtlHours,
+  signSessionToken, verifySessionToken,
   type SessionTokenClaims, type SignSessionTokenInput,
 } from './domain/token';
 ```
@@ -65,6 +66,8 @@ di-`parse` dengan `authUserSchema` → **`ZodError`, bukan `AuthError`, bila row
 | `oauthLogin` | `(input: OAuthLoginInput, context?: LoginContext) => Promise<LoginResponse>` | tolak `emailVerified: false` → `OAUTH_EMAIL_UNVERIFIED` (400). Cabang: (1) identity sudah ter-link → langsung masuk tanpa cek email; (2) email sudah punya akun → auto-link, `P2002` = `OAUTH_ACCOUNT_LINKED` (409); (3) email baru → buat akun `password: null` + `emailVerifiedAt: now()`; `P2002` saat create → retry sekali lalu `EMAIL_TAKEN`. Nonaktif → `UNAUTHORIZED` (401). Akun lama tanpa verifikasi → **di-backfill `emailVerifiedAt`** |
 | `requestEmailVerification` | `(email: string) => Promise<{token,name,email} \| null>` | `null` bila email tak dikenal **atau** sudah terverifikasi (**anti-enumerasi — treat sebagai sukses**). `deleteMany` token lama → `randomBytes(32).toString('base64url')` (43 char) → TTL `getVerifyTtlHours()` |
 | `verifyEmail` | `(token: string) => Promise<AuthUser>` | tak dikenal / kedaluwarsa (`expiresAt <= now`, inclusif) → `INVALID_VERIFY_TOKEN` (400). Hapus **semua** token user → set `emailVerifiedAt`. **Tidak membuat sesi/cookie** |
+| `requestPasswordReset` | `(email: string) => Promise<{token,name,email} \| null>` | `null` bila email tak dikenal **atau** `!isActive` (**anti-enumerasi — treat sebagai sukses**). `deleteMany` token lama → `randomBytes(32)` base64url → TTL `getResetTtlHours()`. Akun OAuth-only (`password: null`) **boleh**; **tidak** menyentuh `emailVerifiedAt` |
+| `resetPassword` | `(token: string, password: string) => Promise<AuthUser>` | tak dikenal / kedaluwarsa / akun hilang-nonaktif → `INVALID_RESET_TOKEN` (400). `deleteMany` semua token reset → update `password` (hash scrypt) → **`deleteMany` SEMUA sesi** (paksa login ulang). **Tidak membuat sesi/cookie** |
 | `logout` | `(token: string) => Promise<void>` | **verifikasi JWT dulu** → `UNAUTHORIZED` bila invalid/kedaluwarsa (baris DB tidak dihapus), lalu `deleteMany({ token: claims.jti })` |
 | `authenticate` | `(token: string) => Promise<AuthUser>` | 3 lapis: signature+exp JWT → lookup `Session` by `jti` + `expiresAt` (revocation) → `auth.isActive`. Read-only. Semua gagal = `UNAUTHORIZED` (401) dengan 3 pesan berbeda tapi **kode sama** |
 | `createSession` (private) | `(auth, context) => Promise<LoginResponse>` | satu `now` untuk semua → update `lastLoginAt` → sweep sesi expired user ini → insert `Session { token: jti }`. **Tahap Next tidak pernah mengirim `context`** → `authAgent`/`ipAddress` selalu `null` (hanya `apps/api` yang mengisi) |
@@ -76,13 +79,14 @@ di-`parse` dengan `authUserSchema` → **`ZodError`, bukan `AuthError`, bila row
 ```ts
 export type AuthErrorCode =
   | 'EMAIL_TAKEN' | 'EMAIL_NOT_VERIFIED' | 'INVALID_CREDENTIALS' | 'UNAUTHORIZED'
-  | 'OAUTH_ACCOUNT_LINKED' | 'OAUTH_EMAIL_UNVERIFIED' | 'INVALID_VERIFY_TOKEN';
+  | 'OAUTH_ACCOUNT_LINKED' | 'OAUTH_EMAIL_UNVERIFIED'
+  | 'INVALID_VERIFY_TOKEN' | 'INVALID_RESET_TOKEN';
 ```
 
 | Kode | Status |
 | --- | --- |
 | `EMAIL_TAKEN`, `OAUTH_ACCOUNT_LINKED` | 409 |
-| `OAUTH_EMAIL_UNVERIFIED`, `INVALID_VERIFY_TOKEN` | 400 |
+| `OAUTH_EMAIL_UNVERIFIED`, `INVALID_VERIFY_TOKEN`, `INVALID_RESET_TOKEN` | 400 |
 | `EMAIL_NOT_VERIFIED` | 403 |
 | `INVALID_CREDENTIALS`, `UNAUTHORIZED` (fallback) | 401 |
 
@@ -102,8 +106,9 @@ tanpa cabang status = **diam-diam 401**. Kode juga wajib ada di `API_ERROR_CODES
   `Session.token` menyimpan **`jti`** → logout bisa mencabut token yang sudah terbit.
 - **Env**: `JWT_SECRET` dibaca **lazily** (per pemanggilan), kosong → `Error('[auth]
   JWT_SECRET is not set. Define it in the root .env (see .env.example).')`.
-  `AUTH_SESSION_TTL_HOURS` default `168`, `VERIFY_TOKEN_TTL_HOURS` default `24`
-  (`getVerifyTtlHours` memetakan `''` → default).
+  `AUTH_SESSION_TTL_HOURS` default `168`, `VERIFY_TOKEN_TTL_HOURS` default `24`,
+  `RESET_TOKEN_TTL_HOURS` default `1` (`getVerifyTtlHours`/`getResetTtlHours`
+  memetakan `''`/tidak valid → default).
 
 ## 6. Server actions (`src/next/server/actions.ts`, `'use server'`)
 
@@ -125,11 +130,15 @@ function toFailure(error: unknown): AuthActionFailure {
 | `loginAction` | `request: LoginRequest` | `LoginActionResult` | set cookie sesi |
 | `registerAction` | `request: RegisterRequest` | `RegisterActionResult` | **tanpa auto-login**, `requiresEmailVerification: true` selalu literal; kirim email **best-effort** (kegagalan di-`console.error`, akun tetap terdaftar) |
 | `resendVerificationAction` | `email: string` (**posisional, bukan object**) | `ResendVerificationActionResult` | selalu `{ok:true}` bila tidak ada error server |
+| `forgotPasswordAction` | `email: string` (**posisional, bukan object**) | `ForgotPasswordActionResult` | selalu `{ok:true}` bila tidak ada error server (anti-enumerasi); email **best-effort** |
+| `resetPasswordAction` | `request: ResetPasswordRequest` (object `{token, password}`) | `ResetPasswordActionResult` | **validasi zod dulu** (`resetPasswordRequestSchema`) → gagal = `{ok:false,400,'VALIDATION'}` **tanpa** menyentuh domain; sukses = `{ok:true, user}` (sesi sudah dicabut domain) |
 | `logoutAction` | — | `LogoutActionResult` | selalu `{ok:true}`; kegagalan logout domain ditelan, cookie tetap dibersihkan |
 | `meAction` | — | `MeActionResult` | `UNAUTHORIZED` → `{ok:true,user:null}`; **error lain diteruskan** (outage DB tidak disamarkan jadi "belum login") |
 
-Helper privat: `verificationLink(token)` = `${APP_URL (trim trailing '/')}/auth/verify-email?token=...`
-(default `http://localhost:3000`) dan `sendVerificationMail(pending)` (try/catch, log saja).
+Helper privat: `verificationLink(token)` = `${APP_URL (trim trailing '/')}/auth/verify-email?token=...`,
+`passwordResetLink(token)` = `${APP_URL}/auth/forgot-password/new-password?token=...`
+(default `http://localhost:3000`), plus `sendVerificationMail`/`sendPasswordResetMail`
+(try/catch, log saja — kegagalan kirim tidak membatalkan aksi).
 
 ## 7. Guards & cookie (`src/next/server/`)
 
@@ -161,7 +170,8 @@ type AuthContextValue = {
 - Gagal → melempar `AuthActionError { status, code, message }` (pakai `new.target.name`).
 - `authErrorMessage(error)` → teks friendly Indonesia; kode yang di-cover:
   `INVALID_CREDENTIALS`, `EMAIL_TAKEN`, `EMAIL_NOT_VERIFIED`, `INVALID_VERIFY_TOKEN`,
-  `UNAUTHORIZED`, `FORBIDDEN`, `VALIDATION`, `BAD_REQUEST`, `TRANSPORT`, `INTERNAL`.
+  `INVALID_RESET_TOKEN`, `UNAUTHORIZED`, `FORBIDDEN`, `VALIDATION`, `BAD_REQUEST`,
+  `TRANSPORT`, `INTERNAL`.
 - `useAuth()` di luar provider → `throw new Error('useAuth harus dipakai di dalam <AuthProvider>.')`.
 
 ## 9. Gateway Google OAuth (`src/next/oauth.ts`)
@@ -197,11 +207,25 @@ Dipakai **hanya** oleh route handler `apps/web/app/api/auth/google{,/callback}/r
 | Login ditolak 403 → tombol kirim ulang | `loginAction` gagal `EMAIL_NOT_VERIFIED` → `FormLogin resend={...}` |
 | Sisa token | tabel `EmailVerificationToken` (FK `authId`, cascade) |
 
+## 10b. Peta alur reset password
+
+| Langkah | File |
+| --- | --- |
+| Form lupa password → `forgotPasswordAction` | `apps/web/app/auth/forgot-password/page.tsx` (atau `apps/admin/...` sama) + `packages/ui/src/auth/form-forgot-password.tsx` |
+| Buat token + kirim email | `auth.service.requestPasswordReset` → `sendPasswordResetMail` → `packages/email` (`sendPasswordReset`) |
+| Halaman server (tanpa token → kartu tidak valid) | `apps/{web,admin}/app/auth/forgot-password/new-password/page.tsx` |
+| Form client → `resetPasswordAction` | `apps/{web,admin}/components/reset-password-form.tsx` (`FormNewPassword`) |
+| Tukar token → password baru + cabut sesi | `auth.service.resetPassword` → `redirect('/auth/login?reset=1')` |
+| Banner sukses | `apps/web/app/auth/login/page.tsx` + `apps/admin/app/auth/login/page.tsx` (`RESET_NOTICE`) |
+| Sisa token | tabel `PasswordResetToken` (FK `authId`, cascade) |
+
 ## 11. Test domain
 
-- `src/domain/*.spec.ts` + `src/next/*.spec.ts` + `src/next/server/*.spec.ts` = **86 test /
+- `src/domain/*.spec.ts` + `src/next/*.spec.ts` + `src/next/server/*.spec.ts` = **103 test /
   7 suite** — terbanyak di repo.
-- `jest.mock('@packages/db')` (tanpa DB nyata), `jest.mock('next/headers')` untuk server.
+- `jest.mock('@packages/db')` (tanpa DB nyata), `jest.mock('next/headers')` untuk server;
+  mock Prisma di spec domain wajib ikut menambah model baru (mis. `passwordResetToken:
+  { findUnique, create, deleteMany }`).
 - Konvensi: fixture user memuat `emailVerifiedAt`; beforeEach selalu
-  `delete process.env.VERIFY_TOKEN_TTL_HOURS` / `AUTH_SESSION_TTL_HOURS` / `JWT_SECRET`
-  agar default TTL tidak bocor antar-test.
+  `delete process.env.VERIFY_TOKEN_TTL_HOURS` / `RESET_TOKEN_TTL_HOURS` /
+  `AUTH_SESSION_TTL_HOURS` / `JWT_SECRET` agar default TTL tidak bocor antar-test.

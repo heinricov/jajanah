@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-import type { AuthUser, LoginRequest, LoginResponse, RegisterRequest, Role } from '../types/auth';
+import type {
+  AuthUser,
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+  ResetPasswordRequest,
+  Role,
+} from '../types/auth';
 
 export const roleSchema: z.ZodType<Role> = z.enum(['USER', 'ADMIN']);
 
@@ -12,6 +19,12 @@ export const registerRequestSchema: z.ZodType<RegisterRequest> = z.object({
 
 export const loginRequestSchema: z.ZodType<LoginRequest> = z.object({
   email: z.email().max(254),
+  password: z.string().min(8).max(128),
+});
+
+export const resetPasswordRequestSchema: z.ZodType<ResetPasswordRequest> = z.object({
+  // base64url 32 byte = 43 karakter; batas atas menahan input liar dari query.
+  token: z.string().min(1).max(256),
   password: z.string().min(8).max(128),
 });
 

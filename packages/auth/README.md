@@ -69,6 +69,8 @@ Auth dijalankan lewat **Server Actions** (`'use server'`) yang ada di package in
 | `loginAction`              | `authService.login` → set cookie httpOnly → `{ ok: true, user }`                                                               |
 | `registerAction`           | `authService.register` (**tanpa auto-login**) + kirim email konfirmasi → `{ ok: true, user, requiresEmailVerification: true }` |
 | `resendVerificationAction` | `requestEmailVerification` + kirim ulang email → `{ ok: true }` selalu (respons identis — anti-enumerasi)                      |
+| `forgotPasswordAction`     | `requestPasswordReset` + kirim tautan reset → `{ ok: true }` selalu (respons identis — anti-enumerasi)                         |
+| `resetPasswordAction`      | validasi zod → `resetPassword` (password baru + cabut semua sesi) → `{ ok: true, user }`                                       |
 | `logoutAction`             | revoke sesi (best-effort) + hapus cookie → `{ ok: true }`                                                                      |
 | `meAction`                 | cookie → `authService.authenticate` → `{ ok: true, user \| null }`                                                             |
 
@@ -93,15 +95,16 @@ Desain: token hanya hidup di **cookie httpOnly** (tak pernah menyentuh JS) — `
 
 Error domain memakai `AuthError` dengan `code` dari `API_ERROR_CODES` (`@packages/validators`):
 
-| Code                     | Status | Kapan                                               |
-| ------------------------ | ------ | --------------------------------------------------- |
-| `EMAIL_TAKEN`            | 409    | email sudah terdaftar (+race P2002)                 |
-| `EMAIL_NOT_VERIFIED`     | 403    | login password sebelum konfirmasi email pertama     |
-| `INVALID_CREDENTIALS`    | 401    | email salah / password salah / non-aktif            |
-| `UNAUTHORIZED`           | 401    | token rusak/kedaluwarsa/sesi hilang                 |
-| `OAUTH_ACCOUNT_LINKED`   | 409    | `(provider, providerId)` sudah tertaut ke akun lain |
-| `OAUTH_EMAIL_UNVERIFIED` | 400    | `email_verified` di ID token Google false           |
-| `INVALID_VERIFY_TOKEN`   | 400    | tautan konfirmasi hilang/kedaluwarsa/sudah dipakai  |
+| Code                     | Status | Kapan                                                  |
+| ------------------------ | ------ | ------------------------------------------------------ |
+| `EMAIL_TAKEN`            | 409    | email sudah terdaftar (+race P2002)                    |
+| `EMAIL_NOT_VERIFIED`     | 403    | login password sebelum konfirmasi email pertama        |
+| `INVALID_CREDENTIALS`    | 401    | email salah / password salah / non-aktif               |
+| `UNAUTHORIZED`           | 401    | token rusak/kedaluwarsa/sesi hilang                    |
+| `OAUTH_ACCOUNT_LINKED`   | 409    | `(provider, providerId)` sudah tertaut ke akun lain    |
+| `OAUTH_EMAIL_UNVERIFIED` | 400    | `email_verified` di ID token Google false              |
+| `INVALID_VERIFY_TOKEN`   | 400    | tautan konfirmasi hilang/kedaluwarsa/sudah dipakai     |
+| `INVALID_RESET_TOKEN`    | 400    | tautan reset password hilang/kedaluwarsa/sudah dipakai |
 
 `AuthError` diterjemahkan exception filter `apps/api` (`AllExceptionsFilter`) ke envelope `{ error: { status, code, message } }` — kode error SSOT sampai ke `ApiHttpError` di `@packages/client`.
 
@@ -132,6 +135,35 @@ loginAction
 - `requestEmailVerification` mengembalikan `null` untuk email tak dikenal/sudah terverifikasi; `resendVerificationAction` tetap membalas `{ ok: true }` (respons identis — anti-enumerasi).
 - Pengiriman email ada di [`@packages/email`](../email/README.md) (adapter Resend, fallback console saat `RESEND_API_KEY` kosong).
 - Seed admin/user demo ditandai terverifikasi otomatis (`db:seed` melakukan backfill `emailVerifiedAt` untuk akun lama).
+
+## Reset password (lupa password)
+
+User lupa password → minta tautan reset via email → buka tautan → set password baru. Tautan **one-time** dengan TTL pendek (`RESET_TOKEN_TTL_HOURS`, default 1 jam), dan sukses reset **mencabut semua sesi** akun (perangkat lain dipaksa masuk ulang).
+
+```
+GET /auth/forgot-password (client component)
+  → forgotPasswordAction(email)
+  → authService.requestPasswordReset — token acak 32 byte, TTL RESET_TOKEN_TTL_HOURS (default 1 jam),
+                                       token lama dinonaktifkan (hanya tautan terbaru berlaku)
+  → @packages/email sendPasswordReset — link ${APP_URL}/auth/forgot-password/new-password?token=…
+                                        (gagal kirim TIDAK membatalkan permintaan)
+  → { ok: true } selalu — kartu "Check your inbox" tampil entah email dikenal (anti-enumerasi)
+
+GET /auth/forgot-password/new-password?token=… (server component — tanpa route handler)
+  → tanpa token → kartu "tautan tidak valid"
+  → ada token → form client ResetPasswordForm
+       → resetPasswordAction({ token, password }) — validasi zod (token 1..256, password 8..128)
+       → authService.resetPassword — token valid: ganti hash password, hapus semua token reset,
+                                     cabut SEMUA sesi → { ok: true, user }
+                                     → redirect /auth/login?reset=1 (tanpa auto-login)
+       → token hilang/kedaluwarsa → INVALID_RESET_TOKEN (400) → notice merah, form tetap terbuka
+```
+
+- Token disimpan di tabel `PasswordResetToken` (unik, one-time) — pola sama dengan `EmailVerificationToken`.
+- `requestPasswordReset` mengembalikan `null` untuk email tak dikenal/akun nonaktif; `forgotPasswordAction` tetap membalas `{ ok: true }` (respons identis — anti-enumerasi).
+- Akun **OAuth-only** (`password: null`) **boleh** reset — bukti kontrol email cukup untuk menyetel password pertama.
+- Reset **tidak** menandai `emailVerifiedAt`: akun yang belum konfirmasi registrasi tetap harus membuka tautan konfirmasi setelahnya (login masih ditolak `EMAIL_NOT_VERIFIED` sampai saat itu).
+- Tautan selalu mengarah ke halaman `apps/web` (basis `APP_URL`) — alur konfirmasi email juga begitu; akun admin cukup ganti password di sana lalu login kembali di panel admin.
 
 ## Login dengan Google (OAuth)
 
@@ -202,14 +234,15 @@ Troubleshooting & catatan:
 
 ## Environment
 
-| Variabel                 | Default                 | Deskripsi                                                                                |
-| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------- |
-| `JWT_SECRET`             | — (wajib)               | Tanda tangan JWT HS256. Buat: `openssl rand -base64 48`. Hanya di `.env` (gitignored).   |
-| `AUTH_SESSION_TTL_HOURS` | `168`                   | Umur sesi (jam). Tidak valid → fallback default.                                         |
-| `VERIFY_TOKEN_TTL_HOURS` | `24`                    | Umur tautan konfirmasi email (jam). Tidak valid → fallback default.                      |
-| `APP_URL`                | `http://localhost:3000` | Basis URL tautan konfirmasi email (`/auth/verify-email?token=…`).                        |
-| `GOOGLE_CLIENT_ID`       | —                       | OAuth client ID Google (Web application). Kosong → `oauth_config` (hanya apps/web).      |
-| `GOOGLE_CLIENT_SECRET`   | —                       | OAuth client secret Google. Isi di root `.env` — panduan: "Login dengan Google (OAuth)". |
+| Variabel                 | Default                 | Deskripsi                                                                                            |
+| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`             | — (wajib)               | Tanda tangan JWT HS256. Buat: `openssl rand -base64 48`. Hanya di `.env` (gitignored).               |
+| `AUTH_SESSION_TTL_HOURS` | `168`                   | Umur sesi (jam). Tidak valid → fallback default.                                                     |
+| `VERIFY_TOKEN_TTL_HOURS` | `24`                    | Umur tautan konfirmasi email (jam). Tidak valid → fallback default.                                  |
+| `RESET_TOKEN_TTL_HOURS`  | `1`                     | Umur tautan reset password (jam). Tidak valid → fallback default.                                    |
+| `APP_URL`                | `http://localhost:3000` | Basis URL tautan email (`/auth/verify-email?token=…`, `/auth/forgot-password/new-password?token=…`). |
+| `GOOGLE_CLIENT_ID`       | —                       | OAuth client ID Google (Web application). Kosong → `oauth_config` (hanya apps/web).                  |
+| `GOOGLE_CLIENT_SECRET`   | —                       | OAuth client secret Google. Isi di root `.env` — panduan: "Login dengan Google (OAuth)".             |
 
 Nilai env dibaca via `@packages/environment` (root `.env*`, SSOT). Pengiriman email memakai `RESEND_API_KEY` & `MAIL_FROM` — lihat [`@packages/email`](../email/README.md).
 
@@ -224,9 +257,9 @@ packages/auth/
 └── src/
     ├── index.ts              # aggregator publik root: re-export dari domain/
     ├── domain/               # mesin auth (Node + Prisma)
-    │   ├── auth.service.ts   # register / login / logout / authenticate / oauthLogin / requestEmailVerification / verifyEmail
+    │   ├── auth.service.ts   # register / login / logout / authenticate / oauthLogin / requestEmailVerification / verifyEmail / requestPasswordReset / resetPassword
     │   ├── password.ts       # hashPassword / verifyPassword (scrypt)
-    │   ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256) + getVerifyTtlHours
+    │   ├── token.ts          # signSessionToken / verifySessionToken (JWT HS256) + getVerifyTtlHours / getResetTtlHours
     │   ├── errors.ts         # AuthError { code, status }
     │   ├── seed.ts           # seed idempotent admin + user demo (backfill emailVerifiedAt)
     │   └── *.spec.ts         # unit test domain
@@ -237,7 +270,7 @@ packages/auth/
         ├── errors.ts         # AuthActionError + authErrorMessage
         ├── oauth.ts          # beginGoogleOAuth / completeGoogleOAuth (state + Google OAuth2)
         └── server/           # guards, server actions, opsi kuki (+ spec)
-            ├── actions.ts    # 'use server' — login/register/resend/logout/me (ke domain langsung)
+            ├── actions.ts    # 'use server' — login/register/resend/forgot/reset/logout/me (ke domain langsung)
             ├── action-types.ts # tipe hasil JSON { ok, ... }
             ├── guards.ts     # getSessionUser / requireAuth / requireAdmin
             └── cookie-options.ts

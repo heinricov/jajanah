@@ -1,7 +1,9 @@
 import { createHmac } from 'node:crypto';
 
 import {
+  DEFAULT_RESET_TTL_HOURS,
   DEFAULT_SESSION_TTL_HOURS,
+  getResetTtlHours,
   getSessionTtlHours,
   signSessionToken,
   verifySessionToken,
@@ -14,6 +16,7 @@ describe('signSessionToken / verifySessionToken', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = SECRET;
     delete process.env.AUTH_SESSION_TTL_HOURS;
+    delete process.env.RESET_TOKEN_TTL_HOURS;
   });
 
   it('roundtrip — klaim valid dikembalikan utuh', () => {
@@ -113,5 +116,18 @@ describe('signSessionToken / verifySessionToken', () => {
 
     process.env.AUTH_SESSION_TTL_HOURS = '24';
     expect(getSessionTtlHours()).toBe(24);
+  });
+
+  it('getResetTtlHours memakai default 1 jam bila env kosong/tidak valid', () => {
+    expect(getResetTtlHours()).toBe(DEFAULT_RESET_TTL_HOURS);
+
+    process.env.RESET_TOKEN_TTL_HOURS = '0';
+    expect(getResetTtlHours()).toBe(DEFAULT_RESET_TTL_HOURS);
+
+    process.env.RESET_TOKEN_TTL_HOURS = 'abc';
+    expect(getResetTtlHours()).toBe(DEFAULT_RESET_TTL_HOURS);
+
+    process.env.RESET_TOKEN_TTL_HOURS = '6';
+    expect(getResetTtlHours()).toBe(6);
   });
 });

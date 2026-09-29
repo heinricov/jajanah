@@ -2,17 +2,24 @@
 
 import { emailService } from '@packages/email';
 import { getEnv } from '@packages/environment';
-import type { LoginRequest, RegisterRequest } from '@packages/validators';
+import {
+  resetPasswordRequestSchema,
+  type LoginRequest,
+  type RegisterRequest,
+  type ResetPasswordRequest,
+} from '@packages/validators';
 
 import { authService } from '../../domain/auth.service';
 import { AuthError } from '../../domain/errors';
 import { clearSessionCookie, getSessionToken, setSessionCookie } from './cookie';
 import type {
   AuthActionFailure,
+  ForgotPasswordActionResult,
   LoginActionResult,
   LogoutActionResult,
   MeActionResult,
   RegisterActionResult,
+  ResetPasswordActionResult,
   ResendVerificationActionResult,
 } from './action-types';
 
@@ -38,6 +45,12 @@ function verificationLink(token: string): string {
   return `${base}/auth/verify-email?token=${encodeURIComponent(token)}`;
 }
 
+/** URL absolut tautan reset password — halaman `new-password` di app web. */
+function passwordResetLink(token: string): string {
+  const base = (getEnv('APP_URL') ?? 'http://localhost:3000').replace(/\/+$/, '');
+  return `${base}/auth/forgot-password/new-password?token=${encodeURIComponent(token)}`;
+}
+
 /**
  * Kirim email konfirmasi — kegagalan pengiriman TIDAK merusak aksi (akun
  * sudah terdaftar; user bisa meminta kirim ulang dari halaman verifikasi).
@@ -55,6 +68,23 @@ async function sendVerificationMail(pending: {
     });
   } catch (cause) {
     console.error('[auth] gagal kirim email konfirmasi:', cause);
+  }
+}
+
+/** Kirim tautan reset — kegagalan pengiriman TIDAK merusak aksi (anti-enumerasi). */
+async function sendPasswordResetMail(pending: {
+  token: string;
+  name: string;
+  email: string;
+}): Promise<void> {
+  try {
+    await emailService.sendPasswordReset({
+      to: pending.email,
+      name: pending.name,
+      link: passwordResetLink(pending.token),
+    });
+  } catch (cause) {
+    console.error('[auth] gagal kirim email reset password:', cause);
   }
 }
 
@@ -95,6 +125,40 @@ export async function resendVerificationAction(
     const pending = await authService.requestEmailVerification(email);
     if (pending) await sendVerificationMail(pending);
     return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+/**
+ * Lupa password: kirim tautan reset — respons sukses identik entah email
+ * dikenal atau tidak (anti-enumerasi; token lama dinonaktifkan).
+ */
+export async function forgotPasswordAction(email: string): Promise<ForgotPasswordActionResult> {
+  try {
+    const pending = await authService.requestPasswordReset(email);
+    if (pending) await sendPasswordResetMail(pending);
+    return { ok: true };
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
+/**
+ * Reset password: tukar token → password baru (input divalidasi zod di sini).
+ * Sukses: semua sesi akun dicabut — user masuk ulang dengan password baru.
+ */
+export async function resetPasswordAction(
+  request: ResetPasswordRequest,
+): Promise<ResetPasswordActionResult> {
+  const parsed = resetPasswordRequestSchema.safeParse(request);
+  if (!parsed.success) {
+    return { ok: false, status: 400, code: 'VALIDATION', message: 'Invalid reset request' };
+  }
+
+  try {
+    const user = await authService.resetPassword(parsed.data.token, parsed.data.password);
+    return { ok: true, user };
   } catch (error) {
     return toFailure(error);
   }

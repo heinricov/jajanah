@@ -17,6 +17,8 @@ const FRIENDLY_MESSAGES: Record<string, string> = {
   EMAIL_NOT_VERIFIED: 'Email Anda belum diverifikasi. Buka tautan konfirmasi di kotak masuk Anda.',
   INVALID_VERIFY_TOKEN:
     'Tautan konfirmasi tidak valid atau sudah kedaluwarsa. Kirim ulang email konfirmasi.',
+  INVALID_RESET_TOKEN:
+    'Tautan reset password tidak valid atau sudah kedaluwarsa. Minta tautan baru.',
   UNAUTHORIZED: 'Sesi Anda berakhir. Silakan masuk kembali.',
   FORBIDDEN: 'Anda tidak punya akses ke halaman ini.',
   VALIDATION: 'Periksa kembali isian Anda.',

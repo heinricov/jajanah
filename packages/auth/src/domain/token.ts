@@ -44,6 +44,15 @@ export function getVerifyTtlHours(): number {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_VERIFY_TTL_HOURS;
 }
 
+/** Default umur tautan reset password: 1 jam (override via `RESET_TOKEN_TTL_HOURS`). */
+export const DEFAULT_RESET_TTL_HOURS = 1;
+
+export function getResetTtlHours(): number {
+  const raw = getEnv('RESET_TOKEN_TTL_HOURS');
+  const value = raw === undefined || raw === '' ? Number.NaN : Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_RESET_TTL_HOURS;
+}
+
 function base64url(input: string): string {
   return Buffer.from(input, 'utf8').toString('base64url');
 }

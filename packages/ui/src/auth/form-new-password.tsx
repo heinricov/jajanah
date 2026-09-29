@@ -28,7 +28,7 @@ export type FormNewPasswordProps = {
   isPending?: boolean;
   /** Pesan informasi netral (mis. "fitur belum tersedia"). */
   notice?: React.ReactNode;
-  /** Nonaktifkan aksi simpan (backend reset belum ada). */
+  /** Nonaktifkan aksi simpan (mis. mode demo) — tombol jadi disabled. */
   disabled?: boolean;
   continueHref?: string;
   title?: React.ReactNode;
@@ -68,8 +68,13 @@ export function FormNewPassword({
     event.preventDefault();
     if (disabled || !valid) return;
     if (onSubmit) {
-      await onSubmit({ password });
-      setDone(true);
+      try {
+        await onSubmit({ password });
+        setDone(true);
+      } catch {
+        // Token tidak valid / server gagal — pemanggil menampilkan pesannya
+        // (prop `notice`); kartu tetap di form supaya user bisa coba lagi.
+      }
     }
   }
 

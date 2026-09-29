@@ -7,7 +7,8 @@ export type AuthErrorCode =
   | 'UNAUTHORIZED'
   | 'OAUTH_ACCOUNT_LINKED'
   | 'OAUTH_EMAIL_UNVERIFIED'
-  | 'INVALID_VERIFY_TOKEN';
+  | 'INVALID_VERIFY_TOKEN'
+  | 'INVALID_RESET_TOKEN';
 
 /**
  * Error domain auth — membawa `code` dari `API_ERROR_CODES` + status HTTP.
@@ -25,7 +26,9 @@ export class AuthError extends Error {
     this.status =
       code === 'EMAIL_TAKEN' || code === 'OAUTH_ACCOUNT_LINKED'
         ? httpStatus.conflict
-        : code === 'OAUTH_EMAIL_UNVERIFIED' || code === 'INVALID_VERIFY_TOKEN'
+        : code === 'OAUTH_EMAIL_UNVERIFIED' ||
+            code === 'INVALID_VERIFY_TOKEN' ||
+            code === 'INVALID_RESET_TOKEN'
           ? httpStatus.badRequest
           : code === 'EMAIL_NOT_VERIFIED'
             ? httpStatus.forbidden

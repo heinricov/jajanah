@@ -11,11 +11,11 @@ Sumber: `apps/web`, `apps/admin`, `apps/api`. Perbarui bila route/struktur berub
 | URL | File | Perilaku |
 | --- | --- | --- |
 | `/` | `app/page.tsx` | Landing publik + `HealthStatus` (contoh pemakaian `apiClient.getHealth()`) |
-| `/auth/login` | `app/auth/login/page.tsx` | `'use client'`, `<Suspense>` untuk `useSearchParams`; baca `?verified=1` (banner), `?error=` (`OAUTH_ERRORS`), tawarkan `resendVerificationAction` bila `EMAIL_NOT_VERIFIED` |
+| `/auth/login` | `app/auth/login/page.tsx` | `'use client'`, `<Suspense>` untuk `useSearchParams`; baca `?verified=1` (banner), `?reset=1` (banner `RESET_NOTICE`), `?error=` (`OAUTH_ERRORS`), tawarkan `resendVerificationAction` bila `EMAIL_NOT_VERIFIED` |
 | `/auth/register` | `app/auth/register/page.tsx` | Tanpa auto-login → redirect `/auth/verify-email?sent=1&email=...` |
 | `/auth/verify-email` | `app/auth/verify-email/page.tsx` | **Server component**: `?token` valid → `authService.verifyEmail` → `redirect('/auth/login?verified=1')`; token invalid/kedaluwarsa → kartu "Tautan tidak valid"; `?sent=1` → kartu cek-email + tombol kirim ulang |
-| `/auth/forgot-password` | `app/auth/forgot-password/page.tsx` | **Stub disabled** ("Fitur reset password belum tersedia...") |
-| `/auth/forgot-password/new-password` | `app/auth/forgot-password/new-password/page.tsx` | **Stub disabled** |
+| `/auth/forgot-password` | `app/auth/forgot-password/page.tsx` | **Client component**: `FormForgotPassword` → `forgotPasswordAction` (selalu `{ok:true}` — kartu "Check your inbox" entah email dikenal; error server → `notice`) |
+| `/auth/forgot-password/new-password` | `app/auth/forgot-password/new-password/page.tsx` | **Server component**: tanpa `?token` → kartu "Tautan tidak valid"; ada token → `components/reset-password-form.tsx` (client) → `resetPasswordAction` → `redirect('/auth/login?reset=1')`; gagal (`INVALID_RESET_TOKEN`/`VALIDATION`) → `notice`, form tetap terbuka |
 | `/home` | `app/(protected)/home/page.tsx` | Terproteksi `requireAuth()` |
 | `/api/auth/google` | `app/api/auth/google/route.ts` | `GET` → `beginGoogleOAuth()` (satu-satunya route handler auth) |
 | `/api/auth/google/callback` | `app/api/auth/google/callback/route.ts` | `GET` → `completeGoogleOAuth()` → redirect ke `/home` atau `/auth/login?error=...` |
@@ -67,8 +67,8 @@ melakukan verifikasi token di proxy** — biarkan layout yang melakukannya.
 | URL | File | Perilaku |
 | --- | --- | --- |
 | `/` | `app/page.tsx` | `redirect('/dashboard')` |
-| `/auth/login` | `app/auth/login/page.tsx` | `FormLogin` **`showSocial` tidak dipakai** (admin tanpa login Google) dan `footer={null}` (tanpa link Sign Up) |
-| `/auth/forgot-password` (+ `/new-password`) | dua halaman | **Stub disabled**, sama dengan web |
+| `/auth/login` | `app/auth/login/page.tsx` | `FormLogin` **`showSocial` tidak dipakai** (admin tanpa login Google) dan `footer={null}` (tanpa link Sign Up); kini dibungkus `<Suspense>` untuk `useSearchParams` → banner `?reset=1` |
+| `/auth/forgot-password` (+ `/new-password`) | dua halaman | **Aktif**, sama dengan web (server action domain bersama; tautan email selalu berbasis `APP_URL` → halaman web) |
 | `/dashboard` | `app/(protected)/dashboard/page.tsx` | `requireAdmin()` + `AuthDashboardLayout`; **isi masih placeholder** (teks demo) |
 
 - `app/layout.tsx` sama pola dengan web **tanpa** `SiteNavbar`/`Footer`.

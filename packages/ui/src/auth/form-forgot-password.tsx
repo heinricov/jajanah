@@ -16,7 +16,7 @@ export type FormForgotPasswordProps = {
   isPending?: boolean;
   /** Pesan informasi netral (mis. "fitur belum tersedia"). */
   notice?: React.ReactNode;
-  /** Nonaktifkan aksi kirim (backend belum ada) — tombol jadi disabled. */
+  /** Nonaktifkan aksi kirim (mis. mode demo) — tombol jadi disabled. */
   disabled?: boolean;
   backHref?: string;
   title?: React.ReactNode;
@@ -51,8 +51,13 @@ export function FormForgotPassword({
     }
     setError('');
     if (onSubmit) {
-      await onSubmit(email);
-      setSent(true);
+      try {
+        await onSubmit(email);
+        setSent(true);
+      } catch {
+        // Gagal dikirim — pemanggil menampilkan pesannya (prop `notice`);
+        // kartu tetap di form supaya user bisa mencoba lagi.
+      }
     }
   }
 

@@ -30,6 +30,7 @@ model Auth {
   sessions                Session[]
   oAuthAccounts           OAuthAccount[]
   emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
 }
 
 model OAuthAccount {
@@ -47,6 +48,18 @@ model OAuthAccount {
 }
 
 model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  authId    String   @db.Uuid
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  auth Auth @relation(fields: [authId], references: [id], onDelete: Cascade)
+
+  @@index([authId])
+}
+
+model PasswordResetToken {
   id        String   @id @default(uuid()) @db.Uuid
   authId    String   @db.Uuid
   token     String   @unique

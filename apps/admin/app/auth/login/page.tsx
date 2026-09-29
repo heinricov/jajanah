@@ -1,16 +1,21 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 
 import { FormLogin } from '@packages/ui/auth/';
 import { authErrorMessage, useAuth } from '@packages/auth/next';
 
-export default function LoginPage() {
+const RESET_NOTICE = 'Password berhasil diperbarui. Silakan masuk dengan password baru.';
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { status, login } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const resetNotice = searchParams.get('reset') === '1' ? RESET_NOTICE : null;
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -21,6 +26,7 @@ export default function LoginPage() {
   return (
     <FormLogin
       error={error}
+      notice={resetNotice}
       isPending={pending}
       footer={null}
       title="Masuk Panel Admin"
@@ -38,5 +44,13 @@ export default function LoginPage() {
         }
       }}
     />
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

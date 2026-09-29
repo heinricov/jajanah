@@ -4,6 +4,7 @@ jest.mock('@packages/db', () => ({
     session: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
     oAuthAccount: { findUnique: jest.fn(), create: jest.fn() },
     emailVerificationToken: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
+    passwordResetToken: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
   },
 }));
 
@@ -33,6 +34,7 @@ const { prisma } = jest.requireMock('@packages/db') as {
     session: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
     oAuthAccount: { findUnique: jest.Mock; create: jest.Mock };
     emailVerificationToken: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
+    passwordResetToken: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock };
   };
 };
 
@@ -91,6 +93,7 @@ describe('AuthService', () => {
     process.env.JWT_SECRET = 'auth-service-spec-secret';
     delete process.env.AUTH_SESSION_TTL_HOURS;
     delete process.env.VERIFY_TOKEN_TTL_HOURS;
+    delete process.env.RESET_TOKEN_TTL_HOURS;
   });
 
   describe('register', () => {
@@ -532,6 +535,136 @@ describe('AuthService', () => {
 
       expect(error).toBeInstanceOf(AuthError);
       expect(error.code).toBe('INVALID_VERIFY_TOKEN');
+      expect(error.status).toBe(400);
+      expect(prisma.auth.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it('email tidak dikenal → null tanpa menyentuh token (anti-enumerasi)', async () => {
+      prisma.auth.findUnique.mockResolvedValue(null);
+
+      await expect(authService.requestPasswordReset('hilang@example.com')).resolves.toBeNull();
+      expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+      expect(prisma.passwordResetToken.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('akun nonaktif → null (tidak ada token baru)', async () => {
+      prisma.auth.findUnique.mockResolvedValue(makeRow({ isActive: false }));
+
+      await expect(authService.requestPasswordReset('budi@example.com')).resolves.toBeNull();
+      expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+    });
+
+    it('akun aktif (termasuk belum terverifikasi) → token lama dihapus, token baru dibuat (TTL 1 jam)', async () => {
+      const row = makeRow({ emailVerifiedAt: null });
+      prisma.auth.findUnique.mockResolvedValue(row);
+      prisma.passwordResetToken.deleteMany.mockResolvedValue({ count: 2 });
+      prisma.passwordResetToken.create.mockResolvedValue({ id: 'prt-1' });
+
+      const pending = await authService.requestPasswordReset(' Budi@Example.COM ');
+
+      expect(pending).not.toBeNull();
+      expect(pending?.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(pending?.email).toBe('budi@example.com');
+      expect(prisma.auth.findUnique).toHaveBeenCalledWith({
+        where: { email: 'budi@example.com' },
+      });
+      expect(prisma.passwordResetToken.deleteMany).toHaveBeenCalledWith({
+        where: { authId: row.id },
+      });
+
+      const createArgs = prisma.passwordResetToken.create.mock.calls[0]?.[0] as {
+        data: { authId: string; token: string; expiresAt: Date };
+      };
+      expect(createArgs.data.authId).toBe(row.id);
+      expect(createArgs.data.token).toBe(pending?.token);
+      const ttl = createArgs.data.expiresAt.getTime() - Date.now();
+      expect(ttl).toBeGreaterThan(0.9 * 3600 * 1000);
+      expect(ttl).toBeLessThanOrEqual(3600 * 1000);
+    });
+  });
+
+  describe('resetPassword', () => {
+    /** Siapkan token valid + akun aktif yang mengembalikan `row` pada update. */
+    function mockValidReset(row: AuthRow): void {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: 'prt-1',
+        authId: row.id,
+        token: 'tok-reset',
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.auth.findUnique.mockResolvedValue(row);
+      prisma.passwordResetToken.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.auth.update.mockResolvedValue(row);
+      prisma.session.deleteMany.mockResolvedValue({ count: 2 });
+    }
+
+    it('token valid → password diganti, semua token & sesi akun dihapus', async () => {
+      const row = makeRow();
+      mockValidReset(row);
+
+      const user = await authService.resetPassword('tok-reset', 'Baru1234');
+
+      expect(user.email).toBe(row.email);
+      expect(prisma.passwordResetToken.deleteMany).toHaveBeenCalledWith({
+        where: { authId: row.id },
+      });
+
+      const updateArgs = prisma.auth.update.mock.calls[0]?.[0] as {
+        where: { id: string };
+        data: { password: string };
+      };
+      expect(updateArgs.where.id).toBe(row.id);
+      expect(updateArgs.data.password).toMatch(/^scrypt\$/);
+      expect(updateArgs.data.password).not.toBe(row.password);
+      expect(prisma.session.deleteMany).toHaveBeenCalledWith({
+        where: { authId: row.id },
+      });
+    });
+
+    it('token tidak dikenal (termasuk bekas/pakai ulang) → 400 INVALID_RESET_TOKEN', async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue(null);
+
+      const error = await captureError(authService.resetPassword('tok-hilang', 'Baru1234'));
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('INVALID_RESET_TOKEN');
+      expect(error.status).toBe(400);
+      expect(prisma.auth.update).not.toHaveBeenCalled();
+      expect(prisma.session.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('token kedaluwarsa → 400 INVALID_RESET_TOKEN', async () => {
+      const row = makeRow();
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: 'prt-2',
+        authId: row.id,
+        token: 'tok-exp',
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      const error = await captureError(authService.resetPassword('tok-exp', 'Baru1234'));
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('INVALID_RESET_TOKEN');
+      expect(error.status).toBe(400);
+      expect(prisma.auth.update).not.toHaveBeenCalled();
+    });
+
+    it('akun sudah tidak ada / nonaktif → 400 INVALID_RESET_TOKEN', async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: 'prt-3',
+        authId: 'auth-x',
+        token: 'tok-orphan',
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.auth.findUnique.mockResolvedValue(null);
+
+      const error = await captureError(authService.resetPassword('tok-orphan', 'Baru1234'));
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect(error.code).toBe('INVALID_RESET_TOKEN');
       expect(error.status).toBe(400);
       expect(prisma.auth.update).not.toHaveBeenCalled();
     });

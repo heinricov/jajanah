@@ -3,11 +3,13 @@ import type { AuthUser, LoginRequest, RegisterRequest } from '@packages/validato
 import { AuthError } from '../../domain/errors';
 import { clearSessionCookie, getSessionToken, setSessionCookie } from './cookie';
 import {
+  forgotPasswordAction,
   loginAction,
   logoutAction,
   meAction,
   registerAction,
   resendVerificationAction,
+  resetPasswordAction,
 } from './actions';
 
 jest.mock('next/headers', () => ({ cookies: jest.fn() }));
@@ -18,6 +20,8 @@ jest.mock('../../domain/auth.service', () => ({
     logout: jest.fn(),
     authenticate: jest.fn(),
     requestEmailVerification: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    resetPassword: jest.fn(),
   },
 }));
 jest.mock('./cookie', () => ({
@@ -26,7 +30,7 @@ jest.mock('./cookie', () => ({
   clearSessionCookie: jest.fn(),
 }));
 jest.mock('@packages/email', () => ({
-  emailService: { sendConfirmation: jest.fn() },
+  emailService: { sendConfirmation: jest.fn(), sendPasswordReset: jest.fn() },
 }));
 
 const { authService } = jest.requireMock('../../domain/auth.service') as {
@@ -36,10 +40,12 @@ const { authService } = jest.requireMock('../../domain/auth.service') as {
     logout: jest.Mock;
     authenticate: jest.Mock;
     requestEmailVerification: jest.Mock;
+    requestPasswordReset: jest.Mock;
+    resetPassword: jest.Mock;
   };
 };
 const { emailService } = jest.requireMock('@packages/email') as {
-  emailService: { sendConfirmation: jest.Mock };
+  emailService: { sendConfirmation: jest.Mock; sendPasswordReset: jest.Mock };
 };
 
 const user: AuthUser = {
@@ -195,6 +201,103 @@ describe('resendVerificationAction', () => {
     authService.requestEmailVerification.mockRejectedValue(new Error('db down'));
 
     await expect(resendVerificationAction('budi@example.com')).resolves.toEqual({
+      ok: false,
+      status: 500,
+      code: 'INTERNAL',
+      message: 'Terjadi kesalahan di server.',
+    });
+  });
+});
+
+describe('forgotPasswordAction', () => {
+  it('akun dikenal → kirim tautan reset, ok: true', async () => {
+    authService.requestPasswordReset.mockResolvedValue({
+      token: 'tok-rst',
+      name: 'Budi',
+      email: 'budi@example.com',
+    });
+    emailService.sendPasswordReset.mockResolvedValue({ delivered: true });
+
+    await expect(forgotPasswordAction('budi@example.com')).resolves.toEqual({ ok: true });
+    expect(authService.requestPasswordReset).toHaveBeenCalledWith('budi@example.com');
+    expect(emailService.sendPasswordReset).toHaveBeenCalledWith({
+      to: 'budi@example.com',
+      name: 'Budi',
+      link: expect.stringContaining('/auth/forgot-password/new-password?token=tok-rst'),
+    });
+  });
+
+  it('email tak dikenal → ok: true tanpa email (anti-enumerasi)', async () => {
+    authService.requestPasswordReset.mockResolvedValue(null);
+
+    await expect(forgotPasswordAction('orang@example.com')).resolves.toEqual({ ok: true });
+    expect(emailService.sendPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it('kirim email gagal: aksi tetap sukses (best-effort)', async () => {
+    authService.requestPasswordReset.mockResolvedValue({
+      token: 'tok-rst',
+      name: 'Budi',
+      email: 'budi@example.com',
+    });
+    emailService.sendPasswordReset.mockRejectedValue(new Error('smtp down'));
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(forgotPasswordAction('budi@example.com')).resolves.toEqual({ ok: true });
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('error server → hasil gagal INTERNAL (tanpa bocorkan detail)', async () => {
+    authService.requestPasswordReset.mockRejectedValue(new Error('db down'));
+
+    await expect(forgotPasswordAction('budi@example.com')).resolves.toEqual({
+      ok: false,
+      status: 500,
+      code: 'INTERNAL',
+      message: 'Terjadi kesalahan di server.',
+    });
+  });
+});
+
+describe('resetPasswordAction', () => {
+  it('token valid → password diganti, hasil ok dengan user', async () => {
+    authService.resetPassword.mockResolvedValue(user);
+
+    await expect(resetPasswordAction({ token: 'tok-rst', password: 'Baru1234' })).resolves.toEqual({
+      ok: true,
+      user,
+    });
+    expect(authService.resetPassword).toHaveBeenCalledWith('tok-rst', 'Baru1234');
+  });
+
+  it('input tidak valid (password terlalu pendek) → VALIDATION tanpa menyentuh domain', async () => {
+    await expect(resetPasswordAction({ token: 'tok-rst', password: 'pendek' })).resolves.toEqual({
+      ok: false,
+      status: 400,
+      code: 'VALIDATION',
+      message: 'Invalid reset request',
+    });
+    expect(authService.resetPassword).not.toHaveBeenCalled();
+  });
+
+  it('token kedaluwarsa → gagal INVALID_RESET_TOKEN (400)', async () => {
+    authService.resetPassword.mockRejectedValue(
+      new AuthError('INVALID_RESET_TOKEN', 'Reset link is invalid or expired'),
+    );
+
+    await expect(resetPasswordAction({ token: 'tok-exp', password: 'Baru1234' })).resolves.toEqual({
+      ok: false,
+      status: 400,
+      code: 'INVALID_RESET_TOKEN',
+      message: 'Reset link is invalid or expired',
+    });
+  });
+
+  it('error server → hasil gagal INTERNAL (tanpa bocorkan detail)', async () => {
+    authService.resetPassword.mockRejectedValue(new Error('db down'));
+
+    await expect(resetPasswordAction({ token: 'tok-rst', password: 'Baru1234' })).resolves.toEqual({
       ok: false,
       status: 500,
       code: 'INTERNAL',

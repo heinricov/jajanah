@@ -23,5 +23,14 @@ export type RegisterActionResult =
 
 /** Kirim ulang email konfirmasi — selalu `ok: true` bila tidak ada error server (anti-enumerasi). */
 export type ResendVerificationActionResult = { ok: true } | AuthActionFailure;
+
+/** Kirim tautan reset password — selalu `ok: true` bila tidak ada error server (anti-enumerasi). */
+export type ForgotPasswordActionResult = { ok: true } | AuthActionFailure;
+
+/**
+ * Reset password sukses: password diganti, token dipakai sekali, dan SEMUA
+ * sesi akun dicabut — user masuk ulang dengan password baru.
+ */
+export type ResetPasswordActionResult = { ok: true; user: AuthUser } | AuthActionFailure;
 export type LogoutActionResult = { ok: true };
 export type MeActionResult = { ok: true; user: AuthUser | null };
