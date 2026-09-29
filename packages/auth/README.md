@@ -175,7 +175,7 @@ Tombol "Continue with Google"
   → Google consent screen
   → GET /api/auth/google/callback   (completeGoogleOAuth: validasi state, tukar kode, verifikasi ID token,
                                       resolveGooglePicture → foto profil, authService.oauthLogin → set cookie sesi tj_token)
-  → redirect /home (atau ?error=… bila gagal)
+  → redirect /profile (atau ?error=… bila gagal)
 ```
 
 Kenapa route handler? OAuth2 butuh `redirect_uri` GET yang terdaftar di Google Console — server action tidak punya endpoint GET. Ini **satu-satunya pengecualian** aturan "tanpa route `/api/auth/*`"; semua logika tetap di package ini.

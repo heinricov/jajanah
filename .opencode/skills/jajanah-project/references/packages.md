@@ -227,12 +227,13 @@ Exports map (`package.json`) — **tidak ada root export**, semua lewat subpath:
 "./hooks/*": "./src/hooks/*.ts",
 "./auth/*": "./src/auth/index.ts",           // ← wildcard collapse ke BARREL
 "./navigations/*": "./src/navigations/index.ts", // ← wildcard collapse ke BARREL
+"./profile/*": "./src/profile/index.ts",    // ← wildcard collapse ke BARREL
 "./dashboard/*": "./src/dashboard/*.tsx",
 "./apps/*": "./src/apps/*.tsx"
 ```
 
-⚠️ `auth/*` dan `navigations/*` **tidak menunjuk ke file per komponen** — konsumen
-memakai bentuk barrel `import { FormLogin } from '@packages/ui/auth/';`.
+⚠️ `auth/*`, `navigations/*` dan `profile/*` **tidak menunjuk ke file per komponen** —
+konsumen memakai bentuk barrel `import { FormLogin } from '@packages/ui/auth/';`.
 
 - Tanpa `build`/`dist` — di-bundle Next lewat `transpilePackages`.
 - Konvensi **props-driven**: komponen tidak tahu auth/routing; `onLogout`, `user`,

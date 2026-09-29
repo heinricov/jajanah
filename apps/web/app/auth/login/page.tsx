@@ -35,7 +35,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace('/home');
+      router.replace('/profile');
     }
   }, [status, router]);
 
@@ -68,7 +68,7 @@ function LoginForm() {
         setNotice(null);
         try {
           await login({ email, password });
-          router.replace('/home');
+          router.replace('/profile');
         } catch (cause) {
           setError(authErrorMessage(cause));
           setShowResend(cause instanceof AuthActionError && cause.code === 'EMAIL_NOT_VERIFIED');

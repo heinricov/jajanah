@@ -72,7 +72,7 @@ function safeNext(next: string | null | undefined): string {
   ) {
     return next;
   }
-  return '/home';
+  return '/profile';
 }
 
 function callbackUrl(requestUrl: string): string {
@@ -153,7 +153,7 @@ function toFailure(error: unknown): { ok: false; error: GoogleOAuthError; log?: 
 
 /**
  * Langkah 1: balas URL consent screen Google + set cookie state (httpOnly).
- * `next` = path tujuan setelah sukses (divalidasi internal, default `/home`).
+ * `next` = path tujuan setelah sukses (divalidasi internal, default `/profile`).
  */
 export async function beginGoogleOAuth(
   requestUrl: string,

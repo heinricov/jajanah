@@ -20,6 +20,8 @@ export type NavbarProps = {
   showAuth?: boolean;
   /** Buka menu avatar → Logout (dipasok dari client, mis. `useAuth().logout`). */
   onLogout?: () => void;
+  /** Buka menu avatar → Profile (dipasok dari client, mis. `router.push('/profile')`). */
+  onProfile?: () => void;
   className?: string;
 };
 
@@ -30,6 +32,7 @@ export function Navbar({
   items = DEFAULT_ITEMS,
   showAuth = true,
   onLogout,
+  onProfile,
   className,
 }: NavbarProps) {
   return (
@@ -62,6 +65,7 @@ export function Navbar({
               user={{ name: user.name ?? undefined, image: user.image ?? undefined }}
               menuLabel={user.name ?? 'Akun'}
               onLogout={onLogout}
+              onProfile={onProfile}
             />
           ) : (
             <div className="flex items-center gap-2">

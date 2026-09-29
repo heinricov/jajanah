@@ -16,9 +16,9 @@ Sumber: `apps/web`, `apps/admin`, `apps/api`. Perbarui bila route/struktur berub
 | `/auth/verify-email` | `app/auth/verify-email/page.tsx` | **Server component**: `?token` valid → `authService.verifyEmail` → `redirect('/auth/login?verified=1')`; token invalid/kedaluwarsa → kartu "Tautan tidak valid"; `?sent=1` → kartu cek-email + tombol kirim ulang |
 | `/auth/forgot-password` | `app/auth/forgot-password/page.tsx` | **Client component**: `FormForgotPassword` → `forgotPasswordAction` (selalu `{ok:true}` — kartu "Check your inbox" entah email dikenal; error server → `notice`) |
 | `/auth/forgot-password/new-password` | `app/auth/forgot-password/new-password/page.tsx` | **Server component**: tanpa `?token` → kartu "Tautan tidak valid"; ada token → `components/reset-password-form.tsx` (client) → `resetPasswordAction` → `redirect('/auth/login?reset=1')`; gagal (`INVALID_RESET_TOKEN`/`VALIDATION`) → `notice`, form tetap terbuka |
-| `/home` | `app/(protected)/home/page.tsx` | Terproteksi `requireAuth()` |
+| `/profile` | `app/(protected)/profile/page.tsx` | **Halaman terproteksi utama** (pengganti `/home`): server component → `requireAuth()` → `components/profile-client.tsx` (client) → `ProfileView` dari `@packages/ui/profile/` (hero identitas + kartu "Informasi akun" & "Keamanan") |
 | `/api/auth/google` | `app/api/auth/google/route.ts` | `GET` → `beginGoogleOAuth()` (satu-satunya route handler auth) |
-| `/api/auth/google/callback` | `app/api/auth/google/callback/route.ts` | `GET` → `completeGoogleOAuth()` → redirect ke `/home` atau `/auth/login?error=...` |
+| `/api/auth/google/callback` | `app/api/auth/google/callback/route.ts` | `GET` → `completeGoogleOAuth()` → redirect ke `/profile` atau `/auth/login?error=...` |
 
 Catatan: `(protected)` **tidak** muncul di URL — nama route group.
 
@@ -43,7 +43,7 @@ Stack import: `@packages/ui/globals.css` · `@packages/auth/next` (`AuthProvider
 
 ```ts
 export function proxy(request: NextRequest) { /* cek keberadaan cookie tj_token saja */ }
-export const config = { matcher: ['/home/:path*'] };
+export const config = { matcher: ['/profile/:path*'] };
 ```
 
 Dua lapis keamanan: `proxy.ts` hanya cek **cookie ada** (murah) → verifikasi otoritatif
@@ -53,7 +53,11 @@ melakukan verifikasi token di proxy** — biarkan layout yang melakukannya.
 ### Komponen `components/`
 
 - `site-navbar.tsx` (`'use client'`) — membungkus `SiteNavbar` server-safe, menyuntikkan
-  `onLogout` dari `useAuth()`.
+  `onLogout` dari `useAuth()`; ikut menambahkan item nav **Profil** + `onProfile`
+  (dropdown avatar) bila sesi aktif.
+- `profile-client.tsx` (`'use client'`) — menerima `user` (serializable) dari
+  `app/(protected)/profile/page.tsx`, menyuntikkan `onLogout` (revoke + redirect login)
+  dan slot `resendVerification` (`ResendVerification`, hanya untuk akun belum terverifikasi).
 - `resend-verification.tsx` (`'use client'`) — tombol kirim ulang memanggil
   `resendVerificationAction`.
 - `health-status.tsx` (`'use client'`) — state `loading/ok/error` + `useEffect` dengan

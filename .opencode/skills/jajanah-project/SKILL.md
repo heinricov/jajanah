@@ -214,7 +214,8 @@ Urutan gate di CI (`.github/workflows/ci.yml`) =
   ganti hash + **cabut semua sesi** → redirect `/auth/login?reset=1`. Halaman aktif di
   web & admin.
 - **Logout** mencabut sesi di DB (berdasar `jti`) + menghapus cookie.
-- **Halaman terproteksi**: `(protected)/home` di web (matcher `/home/:path*`),
+- **Halaman terproteksi**: `(protected)/profile` di web (matcher `/profile/:path*` —
+  halaman utama pasca-login, berisi profil `ProfileView`),
   `(protected)/dashboard` di admin (matcher `/dashboard/:path*`) — via `proxy.ts`.
 - **REST API**: `GET /`, `POST /auth/register|login|logout`, `GET /auth/me`
   (Bearer token) — hanya untuk konsumen eksternal, bukan untuk Next app.

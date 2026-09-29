@@ -1,8 +1,8 @@
 # Status proyek — fitur, gap, riwayat, pekerjaan berikutnya
 
 Diverifikasi pada commit **`d805be4`** (branch `main`, remote
-`github.com/heinricov/jajanah`). **Fitur avatar profil OAuth ada di working tree
-belum di-commit** (sesi yang sama dengan pembaruan skill ini).
+`github.com/heinricov/jajanah`). **Dua fitur ada di working tree belum di-commit**
+(sesi berjalan): avatar profil OAuth dan halaman profil `/profile`.
 Perbarui bagian ini setiap kali fitur besar selesai.
 
 ## 1. Posisi saat ini
@@ -27,7 +27,8 @@ Statistik: 181 test / 18 suite (semua hijau), CI 5 langkah, 14 workspace
 | **Avatar profil OAuth** — `Auth.image` (ditampilkan) + `OAuthAccount.image` (per penyedia); foto dari claim `picture` ID token → fallback GET userinfo | `resolveGooglePicture` (`next/oauth.ts`), `oauthLogin` (sinkron dua kolom), `sanitizeImageUrl`, `NavbarUser`/`NavUserUser` | ✅ (sesi terakhir — belum di-commit) |
 | Logout revocable (DB `jti`) + cookie clear | `auth.service.logout`, `logoutAction` | ✅ |
 | Guard: `requireAuth` / `requireAdmin` + `proxy.ts` 2 lapis | `packages/auth/src/next/server/guards.ts`, `apps/*/proxy.ts` | ✅ |
-| Navbar user-aware + menu Logout | `packages/ui/src/navigations`, `apps/web/components/site-navbar.tsx` | ✅ |
+| Navbar user-aware + menu Logout + item **Profil** | `packages/ui/src/navigations`, `apps/web/components/site-navbar.tsx` | ✅ |
+| **Halaman profil terproteksi** (`/profile`, menggantikan `/home`) — hero identitas (avatar, nama, badge) + kartu "Informasi akun" & "Keamanan"; read-only | `apps/web/app/(protected)/profile`, `apps/web/components/profile-client.tsx`, `packages/ui/src/profile` | ✅ (sesi terakhir — belum di-commit) |
 | Shell dashboard admin (sidebar shadcn) | `packages/ui/src/dashboard`, `apps/admin/app/(protected)` | ⚠️ **isi placeholder** (data contoh shadcn, halaman teks "ini untuk admin") |
 | REST API auth (`/auth/*` Bearer) + filter error envelope | `apps/api/src/{auth,filters}` | ✅ (dipakai konsumen eksternal saja) |
 | Logger terstruktur (ALS requestId, redaction) | `packages/logger` | ✅ |
@@ -102,6 +103,7 @@ Urutan verifikasi sebelum commit: `pnpm format` → `pnpm check` → `pnpm test`
 | 12 | **Reset password (lupa password)** | `782da6c` |
 | 13 | **Dokumen diagnosa email tidak sampai** (precedence `.env.<mode>`, suppression list) | `d805be4` (HEAD) |
 | 14 | **Avatar profil OAuth** — belum di-commit (working tree sesi ini) | — |
+| 15 | **Halaman profil terproteksi** (`/home` → `/profile`) — belum di-commit (working tree sesi ini) | — |
 
 ## 7. Kandidat pekerjaan berikutnya
 
