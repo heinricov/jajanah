@@ -191,6 +191,13 @@ SendDeps = { fetchImpl?: FetchLike }                            // injeksi untuk
 - `MAIL_FROM` default `Jajanah <onboarding@resend.dev>`; `APP_NAME` default `Jajanah`.
 - Nama/tautan di-`escapeHtml` di konten HTML; template teks polos tidak.
 - Tanpa `import '@packages/environment'` — baca `process.env` saat dipanggil.
+- **Jebakan email tidak sampai (urutan cek):** (1) `.env.<mode>` dimuat *setelah*
+  `.env` dengan `Object.assign` → baris `RESEND_API_KEY=` **kosong** di
+  `.env.development` **menimpa** key asli → diam-diam fallback console;
+  (2) `MAIL_FROM` `onboarding@resend.dev` hanya boleh kirim ke email akun Resend;
+  (3) Resend balas 2xx tapi `last_event: "suppressed"` (alamat di
+  `GET /suppressions` → hapus via `DELETE /suppressions/{email}`). Status dibaca
+  ulang: `GET /emails?limit=1` → `last_event` (`delivered` = sampai).
 
 ### Prosedur menambah tipe email baru
 

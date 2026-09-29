@@ -58,6 +58,17 @@ Dua email aktif, pola sama — versi HTML + plain-text, nama penerima di-escape 
 
 Nilai dibaca via `process.env` (diisi `@packages/environment` dari root `.env*` — SSOT). Catatan: di `.env.production` isi `MAIL_FROM` dengan domain produksi.
 
+### Diagnosa email tidak sampai
+
+Urutan cek saat lupa password/konfirmasi "berhasil" tapi inbox kosong:
+
+1. **Key tertimpa oleh file mode.** `@packages/environment` memuat `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` dengan `Object.assign`, jadi **file belakangan menimpa**. Baris `RESEND_API_KEY=` kosong di `.env.development` akan menimpa key asli di `.env`. Cek cepat: `loadEnvironment({ mode: 'development' })` → nilainya harus key asli, bukan `''`.
+2. **`MAIL_FROM` default `onboarding@resend.dev`.** Sender ini hanya boleh mengirim ke **email pemilik akun Resend**; ke alamat lain Resend menolak. Solusi: verifikasi domain sendiri di dashboard Resend lalu ganti `MAIL_FROM`.
+3. **Alamat penerima di-suppression list.** Resend menerima request (HTTP 2xx) tetapi `last_event: "suppressed"` dan `message_id: null` → tidak dikirim. Cek `GET /suppressions`, hapus via `DELETE /suppressions/{email}` atau menu Suppressions di dashboard. (Bisa juga khusus test: `delivered@resend.dev` / `bounced@resend.dev` / `suppressed@resend.dev`.)
+4. **Key kosong = memang sengaja fallback console.** `console.log(payload.fallbackLog)` mencetak tautan ke terminal server; `delivered: false, reason: 'no_api_key'`.
+
+Status pengiriman bisa dibaca ulang: `GET /emails?limit=1` → field `last_event` (`delivered` berarti sampai).
+
 ## Struktur
 
 ```
